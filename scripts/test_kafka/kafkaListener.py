@@ -14,6 +14,7 @@ if __name__ == "__main__":
 
   ssc.sparkContext.setLogLevel("ERROR")
 
+  # Streaming Query
   weather_df = ssc \
     .readStream \
     .format("kafka") \
