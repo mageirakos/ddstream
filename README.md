@@ -1,4 +1,4 @@
-# thesis
+# Distributed DenStream in Spark Structured Streaming
 MSc Thesis, University of Patras
 
 # System General:
