@@ -4,9 +4,9 @@ services:
     image: bde2020/spark-master:3.0.2-hadoop3.2
     container_name: spark-master
     ports:
-      - "8080:8080"
-      - "7077:7077"
-      - "4040:4040"
+      - "9080:8080"
+      - "9077:7077"
+      - "9040:4040"
     volumes:
       - ./shared_data:/data
     environment:
