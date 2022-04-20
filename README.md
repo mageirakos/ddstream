@@ -105,6 +105,7 @@ In python you need to specify `--packages org.apache.spark:spark-sql-kafka-0-10_
 # Troubleshoot
 
 * Docker commands not working: `$ su - mageirakos`
+* Check which ports are running: `$ nmap localhost`
 
 
 # Useful Links
