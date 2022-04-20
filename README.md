@@ -2,7 +2,7 @@
 MSc Thesis, University of Patras
 
 # System General:
-- Ubuntu v. 20.04.4 LTS:
+- Ubuntu v. 20.04.4
 - 8 core CPU
 - 16GB RAM
 - Scala version 2.12.10
