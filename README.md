@@ -1,14 +1,14 @@
 # thesis
 MSc Thesis, University of Patras
 
-# System:
+# System General:
 - Ubuntu v. 20.04.4 LTS:
 - 8 core CPU
 - 16GB RAM
 - Scala version 2.12.10
 - Java version 1.8.0_312
 - Python version 3.8.10
-- 
+- server IP: 150.140.193.89
 
 # Installation
 
@@ -45,11 +45,12 @@ Spark cluster has 1 master and 3 worker nodes.
 
 1. Start doccker compose cluster:   
 `$ docker compose up`
+    * Stop: `$ docker compose down`
 2. Run shell on master node:   
 `$ docker ps --format '{{.ID}} {{.Ports}} {{.Names}}'`  
 `$ docker exec -it <spark-master-id> /bin/bash`
-3. Launch spark-shell with 2 cores for each executor (6 in total) and 1GB of RAM:     
-`$ spark-shell --master spark://spark-master:7077 --total-executor-cores 6 --executor-memory 1024m`
+3. Launch pyspark with 2 cores for each executor (6 in total) and 1GB of RAM:     
+`$ pyspark --master spark://localhost:9077 --total-executor-cores 6 --executor-memory 1024m`
 
 
 # Run Kafka Cluster
