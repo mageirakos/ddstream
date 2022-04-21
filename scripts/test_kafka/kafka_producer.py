@@ -1,12 +1,9 @@
 from kafka import KafkaProducer
-import sched, time
+import sched, time, argparse, sys
 
 
 def file_reader(file_name, convertToBytes=False):
-    """
-    Generator for reading the dataset.
-    Call with next(gen) to get the next row.
-    """
+    """Generator for reading the dataset. Call with next(gen) to get the next row."""
     for row in open(file_name, "r"):
         if convertToBytes:
             yield bytes(row.rstrip("\n"), encoding="utf-8")
@@ -14,68 +11,113 @@ def file_reader(file_name, convertToBytes=False):
             yield row.rstrip("\n")
 
 
-def generate_stream(rate):
-    """
-    :param rate: messages per second
-    """
-    # TODO: remove globals
-    global processedCount, timeInterval, total, reader, dataset
+def generate_stream():
+    """Send stream of data to Kafka topic based on rate."""
+    global reader, total_processed
     part = 0
     key = 0
-    numPartitions = 1
-    targetDone = 0
-    while targetDone < rate:  # and processedCount < total:
+    total_current_interval = 0
+    while total_current_interval < rate:
         try:
             stream = next(reader)
         except StopIteration:
             reader = file_reader(dataset)
             stream = next(reader)
 
-        # TODO: Figure out where to use the key -> this I think points to the correct partition
-        key = part % numPartitions
         producer.send(topic, bytes(stream, encoding="utf8"))
-        print(stream)
+        print(f"Sending data to Kafka '{topic}', #{total_processed}")
 
-        targetDone += 1
-        processedCount += 1
+        total_current_interval += 1
+        total_processed += 1
 
 
 def schedule_produce_jobs():
-    """
-    Schedules produce jobs to Kafka every time timeInterval given a specific rate.
-
-    :param rate = rows per second
-    :param timeInterval = wait time before next job (in ms)
-    """
-    # TODO: remove globals
-    global rate, total_rows
-
+    """Schedules produce jobs to Kafka every time time_interval given a specific rate."""
     scheduler = sched.scheduler(time.time, time.sleep)
-    total_jobs = total_rows // rate  # rec. to be exactly divisable by rate
+    total_jobs = total_data // rate
+
     for i in range(total_jobs):
-        next_t = (i * timeInterval) / 1000
-        scheduler.enter(next_t, 1, generate_stream, argument=(rate,))
+        next_t = (i * time_interval) / 1000
+        scheduler.enter(next_t, 1, generate_stream, argument=())
     scheduler.run()
 
 
+def parse_args():
+    DATA_PATH = "./data/"  # assuming script is run from top_level
+    source_path = {
+        "nsl-kdd": DATA_PATH + "NSL-KDD/KDDTrain+_20Percent.txt",
+        "kdd-99": DATA_PATH + "",
+    }
+
+    # Parse cli arguments
+    parser = argparse.ArgumentParser(
+        description="""This is the script responsible for producing the Kafka Stream"""
+    )
+    required = parser.add_argument_group("required arguments")
+    optional = parser.add_argument_group("optional arguments")
+
+    required.add_argument(
+        "-s",
+        "--source",
+        default="nsl-kdd",
+        help="Source dataset for the stream (default nsl-kdd)",
+        required=True,
+    )
+    optional.add_argument(
+        "-r",
+        "--rate",
+        default=1000,
+        type=int,
+        help="Number of rows per interval (default 1000)",
+    )
+    optional.add_argument(
+        "-i",
+        "--interval",
+        default=1000,
+        type=int,
+        help="Interval at which the stream is updated (default 1000 ms)",
+    )
+    optional.add_argument(
+        "--total_data",
+        default=10_000,
+        type=int,
+        help="Target number of data processed (default 10_000)\
+        \nRecommended that total_data is exactly divisible by rate.",
+    )
+    optional.add_argument(
+        "--partitions",
+        default=1,
+        type=int,
+        help="Number of Kafka partitions (default 1)",
+    )
+    optional.add_argument(
+        "--topic",
+        default="test",
+        help="Kafka topic (default 'test')",
+    )
+
+    args = parser.parse_args()
+    dataset = source_path[args.source]
+    rate = args.rate
+    time_interval = args.interval
+    total_data = args.total_data
+    num_partitions = args.partitions
+    topic = args.topic
+    return dataset, rate, time_interval, total_data, num_partitions, topic
+
+
 if __name__ == "__main__":
-    # TODO: Add these as options when running the script
-    rate = 1
-    total_rows = 50_000
-    numPartitions = 1
-    targetDone = 0
-    processedCount = 0
-    timeInterval = 1000  # in ms
-    dataCount = 25192  # total number of data
+    dataset, rate, time_interval, total_data, num_partitions, topic = parse_args()
 
-    nsl_kdd_dataset = "./data/NSL-KDD/KDDTrain+_20Percent.txt"
+    reader = file_reader(dataset)
+    try:
+        producer = KafkaProducer(bootstrap_servers="localhost:9092")
+    except:
+        print(f"Failed: Make sure Kafka server is running and {topic} topic exists")
+        sys.exit()
 
-    reader = file_reader(nsl_kdd_dataset)
-    topic = "weather"
-    producer = KafkaProducer(bootstrap_servers="localhost:9092")
-
+    start, total_processed = time.time(), 0
     schedule_produce_jobs()
-    # TODO: Kafka Consumer gia na einai eisodos sto denstream stin morfi pou theloume
-    # TODO: Spark Consumer gia na doume pws erxode ta data
-    # TODO: Option na dialegeis dataset
-    # TODO: Na valw kai alla datasets
+    print(
+        f"- Finished sending {total_processed} data; Spend {round(time.time() - start, 3)} seconds"
+    )
