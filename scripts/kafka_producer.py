@@ -44,8 +44,11 @@ def schedule_produce_jobs():
 
 def parse_args():
     DATA_PATH = "./data/"  # assuming script is run from top_level
-    source_path = {
-        "nsl-kdd": DATA_PATH + "NSL-KDD/KDDTrain+_20Percent.txt",
+    
+    DB_SOURCE = {
+        "nsl-kdd-raw": DATA_PATH + "NSL-KDD/KDDTrain+_20Percent.txt",
+        "nsl-kdd": DATA_PATH + "nsl-kdd-clean.txt",
+        "nsl-kdd-scaled": DATA_PATH + "nsl-kdd-clean.txt",
         "kdd-99": DATA_PATH + "",
     }
 
@@ -97,7 +100,7 @@ def parse_args():
     )
 
     args = parser.parse_args()
-    dataset = source_path[args.source]
+    dataset = DB_SOURCE[args.source]
     rate = args.rate
     time_interval = args.interval
     total_data = args.total_data
