@@ -29,7 +29,10 @@ https://www.digitalocean.com/community/tutorials/how-to-install-and-use-docker-c
 9. Rename Spark:   
 `$ mv spark-3.0.3-bin-hadoop3.2/ spark`
 10. Add to path (.bashrc) :   
-`$ export PATH=$PATH:/home/mageirakos/opt/spark/bin`
+    ``` bash 
+    export PATH=$PATH:/home/mageirakos/opt/spark/bin
+    export PYSPARK_PYTHON=python3
+    ```
 11. Download Kafka (Binary for Spark 2.12):  
 `$ curl -SLO https://dlcdn.apache.org/kafka/3.1.0/kafka_2.12-3.1.0.tgz`
 12. Extract Kafka in ~/opt:  
@@ -51,7 +54,8 @@ Spark cluster has 1 master and 3 worker nodes.
 `$ docker exec -it <spark-master-id> /bin/bash`
 3. Launch pyspark with 2 cores for each executor (6 in total) and 1GB of RAM:     
 `$ pyspark --master spark://localhost:9077 --total-executor-cores 6 --executor-memory 1024m`
-
+4. Submit application  with 2 cores for each executor (6 in total) and 2GB of RAM:  
+`$ ~/opt/spark/bin/spark-submit --master spark://localhost:9077 --total-executor-cores 6 --executor-memory 2048m --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.0.2 ddstream/run.py`
 
 # Run Kafka Cluster
 * Kafka Quickstart: https://kafka.apache.org/quickstart
