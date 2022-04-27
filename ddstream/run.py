@@ -1,7 +1,9 @@
 from settings import *
+from model import DDStreamModel
 
 # general
 import argparse
+import numpy as np
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import *
 from pyspark.sql.types import *
@@ -32,7 +34,46 @@ def parse_args():
     return topic, timeout
 
 
-def get_training_data(streaming_df, database="nsl-kdd"):
+def split_data(streaming_df, database="nsl-kff"):
+    #TODO: Find out how to densevector
+    # from pyspark.mllib.linalg import VectorUDT, Vectors
+    # from pyspark.ml.feature import VectorAssembler
+
+    # TODO: Test correctness
+    # TODO: Currently features is ArrayType -> chekc if we need numpy array
+    if database == "nsl-kdd":
+        num_cols = 33
+    elif database == "test":
+        num_cols = 5
+
+    # def toDense(vs):
+    #     return udf(lambda vs: Vectors.dense(vs), VectorUDT())
+
+    # arraytovector = udf(lambda vs: Vectors.dense(vs), VectorUDT())
+    
+    # TODO: Find out how to turn it into densevector:
+    # possible solutions:
+    # - https://stackoverflow.com/questions/68959072/pyspark-how-to-convert-a-string-created-from-a-dense-vector-back-to-a-dense-v
+    # - https://stackoverflow.com/questions/49832877/adding-a-vectors-column-to-a-pyspark-dataframe
+    # - VectorAssembler: https://stackoverflow.com/questions/32982425/encode-and-assemble-multiple-features-in-pyspark
+    # - https://stackoverflow.com/questions/57522319/store-densevector-in-dataframe-column-in-pyspark
+    # - https://spark.apache.org/docs/latest/api/python/reference/api/pyspark.ml.linalg.Vectors.html
+    # - https://stackoverflow.com/questions/39025707/how-to-convert-arraytype-to-densevector-in-pyspark-dataframe
+
+    data = (
+        streaming_df.withColumn("tmp", split(col("value"), ",")) #.map(lambda vals: [float(x) for x in vals])
+        .withColumn("label", col("tmp").getItem(num_cols))
+        .withColumn("features", slice(col("tmp"), 1, num_cols))
+        # .withColumn("other", arraytovector(from_json('value',"array<string>")))
+        # .withColumn("other", toDense(streaming_df.tmp))
+    )
+
+    # data = VectorAssembler(inputCols=["features"], outputCol="other").transform(data).select("label", "features", "other")
+
+    return data
+
+
+def get_training_data_exploded(streaming_df, database="nsl-kdd"):
     """Return streaming dataframe of training data based on selected database"""
     if database == "nsl-kdd":
         training_data = (
@@ -136,10 +177,12 @@ if __name__ == "__main__":
 
     TOPIC, TIMEOUT = parse_args()
 
-    ssc = SparkSession.builder.appName("ddstream").master("local[*]").getOrCreate()
+    # ssc = SparkSession.builder.appName("ddstream").master("local[*]").getOrCreate()
     ssc = SparkSession.builder.appName("ddstream").getOrCreate()
     # TODO: not sure this works correctly
     ssc.sparkContext.setLogLevel("WARN")
+    # All local files need to be added like so:
+    ssc.sparkContext.addPyFile('ddstream/model.py') 
 
     # Streaming Query
     # TODO: Maybe using StreamingListener is important (https://spark.apache.org/docs/2.2.0/api/python/pyspark.streaming.html)
@@ -156,12 +199,19 @@ if __name__ == "__main__":
         "CAST(key AS STRING)", "CAST(value AS STRING)", "timestamp"
     )
 
-    #TODO: Might need to change the input to be (key, Vector(doubles)): https://spark.apache.org/docs/latest/api/python/reference/api/pyspark.ml.linalg.DenseVector.html
+    # TODO: Might need to change the input to be (key, Vector(doubles)): https://spark.apache.org/docs/latest/api/python/reference/api/pyspark.ml.linalg.DenseVector.html
     # Dense vectors are simply represented as NumPy array objects, so there is no need to covert them for use in MLlib
-    # 
-    
+    #
+
     # database options : [ 'test', 'nsl-kdd' ]
-    training_data = get_training_data(input_df, database="test")
+    data = split_data(input_df, database="test")
+    training_data = data.select("features") # ArrayType<string>
+
+    # test a broadcast variable
+    # broadcasted_var = ssc.sparkContext.broadcast(('a','b','c'))
+    # model = DDStreamModel(broadcasted_var, ssc.sparkContext)
+
+    training_data = get_training_data_exploded(input_df, database="test")
 
     write_stream = (
         training_data.writeStream.trigger(processingTime="5 seconds")
@@ -169,6 +219,9 @@ if __name__ == "__main__":
         .option("truncate", "false")
         .format("console")
         .start()
+        # .foreach(model.run) #TODO: I probably want foreachBatch() to follow batch approach
+        # .foreachBatch(model.run_batch)
+        # .start()
     )
 
     write_stream.awaitTermination(TIMEOUT)
