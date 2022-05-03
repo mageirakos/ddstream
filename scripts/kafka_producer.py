@@ -118,11 +118,7 @@ if __name__ == "__main__":
 
     reader = file_reader(dataset)
     try:
-        # producer = KafkaProducer(bootstrap_servers="localhost:9092")
-        # producer = KafkaProducer(bootstrap_servers="172.17.0.1:9092")
-        producer = KafkaProducer(bootstrap_servers="150.140.193.89:9092")
-
-        # producer = KafkaProducer(bootstrap_servers="host.docker.internal:9092")
+        producer = KafkaProducer(bootstrap_servers="localhost:9992")
     except:
         print(f"Failed: Make sure Kafka server is running and {topic} topic exists")
         sys.exit()
