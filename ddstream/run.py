@@ -3,7 +3,6 @@ from model import DDStreamModel
 
 # general
 import argparse
-import numpy as np
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import *
 from pyspark.sql.types import *
@@ -182,7 +181,7 @@ if __name__ == "__main__":
     # TODO: not sure this works correctly
     ssc.sparkContext.setLogLevel("WARN")
     # All local files need to be added like so:
-    ssc.sparkContext.addPyFile('ddstream/model.py') 
+    ssc.sparkContext.addPyFile('ddstream/model.py')
 
     # Streaming Query
     # TODO: Maybe using StreamingListener is important (https://spark.apache.org/docs/2.2.0/api/python/pyspark.streaming.html)
@@ -218,12 +217,11 @@ if __name__ == "__main__":
         .outputMode("update")
         .option("truncate", "false")
         .format("console")
-        .start()
         # .foreach(model.run) #TODO: I probably want foreachBatch() to follow batch approach
         # .foreachBatch(model.run_batch)
-        # .start()
+        .start()
     )
 
     write_stream.awaitTermination(TIMEOUT)
-    write_stream.stop()
     print("Stream Data Processing Application Completed.")
+    write_stream.stop()
