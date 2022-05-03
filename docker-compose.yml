@@ -1,8 +1,42 @@
-version: '3.8'
+version: '3.9'
+
 services:
+  zookeeper:
+    image: confluentinc/cp-zookeeper
+    container_name: zookeeper
+    networks:
+      - kafka-spark-net
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+
+  kafka:
+    image: confluentinc/cp-kafka:5.5.8 
+    container_name: kafka
+    depends_on:
+      - zookeeper
+    networks:
+      - kafka-spark-net
+    ports:
+      - 9092:9092
+      - 30001:30001
+    environment:
+      KAFKA_CREATE_TOPICS: test,test2
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 100
+
+
   spark-master:
     image: bde2020/spark-master:3.0.2-hadoop3.2
     container_name: spark-master
+    networks: 
+      - kafka-spark-net
     ports:
       - "9080:8080"
       - "9077:7077"
@@ -11,9 +45,12 @@ services:
       - ./shared_data:/data
     environment:
       - INIT_DAEMON_STEP=setup_spark
+
   spark-worker-1:
     image: bde2020/spark-worker:3.0.2-hadoop3.2
     container_name: spark-worker-1
+    networks: 
+      - kafka-spark-net
     depends_on:
       - spark-master
     ports:
@@ -22,9 +59,12 @@ services:
       - ./shared_data:/data
     environment:
       - "SPARK_MASTER=spark://spark-master:7077"
+
   spark-worker-2:
     image: bde2020/spark-worker:3.0.2-hadoop3.2
     container_name: spark-worker-2
+    networks: 
+      - kafka-spark-net
     depends_on:
       - spark-master
     ports:
@@ -33,9 +73,12 @@ services:
       - ./shared_data:/data
     environment:
       - "SPARK_MASTER=spark://spark-master:7077"
+
   spark-worker-3:
     image: bde2020/spark-worker:3.0.2-hadoop3.2
     container_name: spark-worker-3
+    networks: 
+      - kafka-spark-net
     depends_on:
       - spark-master
     ports:
@@ -44,6 +87,10 @@ services:
       - ./shared_data:/data
     environment:
       - "SPARK_MASTER=spark://spark-master:7077"
+
+networks:
+  kafka-spark-net:
+    name: kafka-spark-net
 
 volumes:
   shared_data:
