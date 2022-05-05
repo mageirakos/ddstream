@@ -34,7 +34,7 @@ def parse_args():
 
 
 def split_data(streaming_df, database="nsl-kff"):
-    #TODO: Find out how to densevector
+    # TODO: Find out how to densevector
     # from pyspark.mllib.linalg import VectorUDT, Vectors
     # from pyspark.ml.feature import VectorAssembler
 
@@ -49,7 +49,7 @@ def split_data(streaming_df, database="nsl-kff"):
     #     return udf(lambda vs: Vectors.dense(vs), VectorUDT())
 
     # arraytovector = udf(lambda vs: Vectors.dense(vs), VectorUDT())
-    
+
     # TODO: Find out how to turn it into densevector:
     # possible solutions:
     # - https://stackoverflow.com/questions/68959072/pyspark-how-to-convert-a-string-created-from-a-dense-vector-back-to-a-dense-v
@@ -60,7 +60,9 @@ def split_data(streaming_df, database="nsl-kff"):
     # - https://stackoverflow.com/questions/39025707/how-to-convert-arraytype-to-densevector-in-pyspark-dataframe
 
     data = (
-        streaming_df.withColumn("tmp", split(col("value"), ",")) #.map(lambda vals: [float(x) for x in vals])
+        streaming_df.withColumn(
+            "tmp", split(col("value"), ",")
+        )  # .map(lambda vals: [float(x) for x in vals])
         .withColumn("label", col("tmp").getItem(num_cols))
         .withColumn("features", slice(col("tmp"), 1, num_cols))
         # .withColumn("other", arraytovector(from_json('value',"array<string>")))
@@ -168,10 +170,6 @@ def print_field_dtypes(streaming_df):
     return
 
 
-def main():
-    pass
-
-
 if __name__ == "__main__":
 
     TOPIC, TIMEOUT = parse_args()
@@ -181,7 +179,7 @@ if __name__ == "__main__":
     # TODO: not sure this works correctly
     ssc.sparkContext.setLogLevel("WARN")
     # All local files need to be added like so:
-    ssc.sparkContext.addPyFile('ddstream/model.py')
+    ssc.sparkContext.addPyFile("ddstream/model.py")
 
     # Streaming Query
     # TODO: Maybe using StreamingListener is important (https://spark.apache.org/docs/2.2.0/api/python/pyspark.streaming.html)
@@ -204,11 +202,14 @@ if __name__ == "__main__":
 
     # database options : [ 'test', 'nsl-kdd' ]
     data = split_data(input_df, database="test")
-    training_data = data.select("features") # ArrayType<string>
+    training_data = data.select("features")  # ArrayType<string>
 
     # test a broadcast variable
     # broadcasted_var = ssc.sparkContext.broadcast(('a','b','c'))
-    # model = DDStreamModel(broadcasted_var, ssc.sparkContext)
+    print("\n\n")
+    # print(f"START broadcast: {broadcasted_var} {broadcasted_var.value}")
+    # model = DDStreamModel(broadcasted_var) # maybe we don't need to input broadcasted var
+    model = DDStreamModel(broadcasted_var)
 
     training_data = get_training_data_exploded(input_df, database="test")
 
@@ -217,11 +218,11 @@ if __name__ == "__main__":
         .outputMode("update")
         .option("truncate", "false")
         .format("console")
-        # .foreach(model.run) #TODO: I probably want foreachBatch() to follow batch approach
-        # .foreachBatch(model.run_batch)
+        .foreachBatch(model.run)
         .start()
     )
 
-    write_stream.awaitTermination(TIMEOUT)
+    write_stream.awaitTermination(TIMEOUT)  # end of stream
+    # print(f"END broadcast: {broadcasted_var} \t {broadcasted_var.value}")
     print("Stream Data Processing Application Completed.")
     write_stream.stop()
