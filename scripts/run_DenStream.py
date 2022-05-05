@@ -46,7 +46,12 @@ params = {
 
 
 denstream = cluster.DenStream(
-    decaying_factor=0.25, beta=1.2, mu=2, epsilon=5, n_samples_init=1000, stream_speed=1000
+    decaying_factor=0.25,
+    beta=1.2,
+    mu=2,
+    epsilon=5,
+    n_samples_init=1000,
+    stream_speed=1000,
 )
 # nsl-kdd-clean-scaled-header
 # temp-small

@@ -15,7 +15,7 @@ def generate_stream():
     """Send stream of data to Kafka topic based on rate."""
     global reader, total_processed
     part = 0
-    key = 0 #TODO: Might need to change this to create artificial ordering
+    key = 0  # TODO: Might need to change this to create artificial ordering
     total_current_interval = 0
     while total_current_interval < rate:
         try:
@@ -43,7 +43,6 @@ def schedule_produce_jobs():
 
 
 def parse_args():
-    
 
     # Parse cli arguments
     parser = argparse.ArgumentParser(
@@ -104,7 +103,7 @@ def parse_args():
 
 if __name__ == "__main__":
     DATA_PATH = "./data/"  # assuming script is run from top_level
-    
+
     DB_SOURCE = {
         "nsl-kdd-raw": DATA_PATH + "NSL-KDD/KDDTrain+_20Percent.txt",
         "nsl-kdd": DATA_PATH + "nsl-kdd-clean.txt",
@@ -112,7 +111,6 @@ if __name__ == "__main__":
         "kdd-99": DATA_PATH + "",
         "test": DATA_PATH + "test.csv",
     }
-
 
     dataset, rate, time_interval, total_data, num_partitions, topic = parse_args()
 

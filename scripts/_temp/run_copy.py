@@ -42,7 +42,7 @@ if __name__ == "__main__":
 
     ssc = SparkSession.builder.appName("ddstream").master("local[*]").getOrCreate()
     ssc = SparkSession.builder.appName("ddstream").getOrCreate()
-    #TODO: not sure log level working
+    # TODO: not sure log level working
     ssc.sparkContext.setLogLevel("WARN")
 
     # Streaming Query
@@ -115,7 +115,7 @@ if __name__ == "__main__":
     # )
     # raw_df_2 = input_df1.select(from_json(col("value"), testSchema).alias("tablename"))
     # raw_df_3 = raw_df_2.select("tablename.*")
-    
+
     output_df = (
         input_df1.withColumn("tmp", split(col("value"), ","))
         .withColumn("col1", col("tmp")[0].cast(IntegerType()))
@@ -123,12 +123,14 @@ if __name__ == "__main__":
         .withColumn("col3", col("tmp")[2].cast(IntegerType()))
         .withColumn("col4", col("tmp")[3].cast(IntegerType()))
         .withColumn("col5", col("tmp")[4].cast(IntegerType()))
-        .withColumn("col6", col("tmp")[5].cast(IntegerType()))#.select("col1","col2","col3","col4","col5","timestamp") # training data
-        .select("col1","col2","col3","col4","col5","col6","timestamp")
+        .withColumn(
+            "col6", col("tmp")[5].cast(IntegerType())
+        )  # .select("col1","col2","col3","col4","col5","timestamp") # training data
+        .select("col1", "col2", "col3", "col4", "col5", "col6", "timestamp")
     )
     ##############################################################
 
-    #TODO: remove cluster column from training stream (keep for validation)
+    # TODO: remove cluster column from training stream (keep for validation)
     # output_df = (
     #     input_df1.withColumn("tmp", split(col("value"), ","))
     #     .withColumn("duration", col("tmp")[0].cast(FloatType()))
@@ -153,34 +155,34 @@ if __name__ == "__main__":
     #     .withColumn("srv_rerror_rate", col("tmp")[19].cast(FloatType()))
     #     .withColumn("same_srv_rate", col("tmp")[20].cast(FloatType()))
     #     .withColumn("diff_srv_rate", col("tmp")[21].cast(FloatType()))
-        # .withColumn("srv_diff_host_rate", col("tmp")[22].cast(FloatType()))
-        # .withColumn("dst_host_count", col("tmp")[23].cast(FloatType()))
-        # .withColumn("dst_host_srv_count", col("tmp")[24].cast(FloatType()))
-        # .withColumn("dst_host_same_srv_rate", col("tmp")[25].cast(FloatType()))
-        # .withColumn("dst_host_diff_srv_rate", col("tmp")[26].cast(FloatType()))
-        # .withColumn("dst_host_same_src_port_rate", col("tmp")[27].cast(FloatType()))
-        # .withColumn("dst_host_srv_diff_host_rate", col("tmp")[28].cast(FloatType()))
-        # .withColumn("dst_host_serror_rate", col("tmp")[29].cast(FloatType()))
-        # .withColumn("dst_host_srv_serror_rate", col("tmp")[30].cast(FloatType()))
-        # .withColumn("dst_host_rerror_rate", col("tmp")[31].cast(FloatType()))
-        # .withColumn("dst_host_srv_rerror_rate", col("tmp")[32].cast(FloatType()))
-        # .withColumn("cluster", col("tmp")[33].cast(StringType()))
-        # .select(
-        #     "duration",
-        #     "src_bytes",
-        #     "dst_bytes",
-        #     "wrong_fragment",
-        #     "urgent",
-        #     "hot",
-        #     "num_failed_logins",
-        #     "num_compromised",
-        #     "root_shell",
-        #     "su_attempted",
-        #     "num_root",
-        #     "num_file_creations",
-        #     "num_shells",
-        #     "num_access_files",
-        #     "count",
+    # .withColumn("srv_diff_host_rate", col("tmp")[22].cast(FloatType()))
+    # .withColumn("dst_host_count", col("tmp")[23].cast(FloatType()))
+    # .withColumn("dst_host_srv_count", col("tmp")[24].cast(FloatType()))
+    # .withColumn("dst_host_same_srv_rate", col("tmp")[25].cast(FloatType()))
+    # .withColumn("dst_host_diff_srv_rate", col("tmp")[26].cast(FloatType()))
+    # .withColumn("dst_host_same_src_port_rate", col("tmp")[27].cast(FloatType()))
+    # .withColumn("dst_host_srv_diff_host_rate", col("tmp")[28].cast(FloatType()))
+    # .withColumn("dst_host_serror_rate", col("tmp")[29].cast(FloatType()))
+    # .withColumn("dst_host_srv_serror_rate", col("tmp")[30].cast(FloatType()))
+    # .withColumn("dst_host_rerror_rate", col("tmp")[31].cast(FloatType()))
+    # .withColumn("dst_host_srv_rerror_rate", col("tmp")[32].cast(FloatType()))
+    # .withColumn("cluster", col("tmp")[33].cast(StringType()))
+    # .select(
+    #     "duration",
+    #     "src_bytes",
+    #     "dst_bytes",
+    #     "wrong_fragment",
+    #     "urgent",
+    #     "hot",
+    #     "num_failed_logins",
+    #     "num_compromised",
+    #     "root_shell",
+    #     "su_attempted",
+    #     "num_root",
+    #     "num_file_creations",
+    #     "num_shells",
+    #     "num_access_files",
+    #     "count",
     #         "srv_count",
     #         "serror_rate",
     #         "srv_serror_rate",
