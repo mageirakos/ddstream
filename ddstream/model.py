@@ -5,9 +5,13 @@ import time
 
 
 class DDStreamModel:
+
     def __init__(
-        self, epsilon=16.0, minPoints=10.0, beta=0.2, mu=10.0, lmbda=0.25, Tp=2
+        self, broadcasted_var, epsilon=16.0, minPoints=10.0, beta=0.2, mu=10.0, lmbda=0.25, Tp=2
     ):
+        self.broadcasted_var = broadcasted_var
+
+        #TODO: check
         self.eps = 0.01
 
         self.time = 0
@@ -67,10 +71,10 @@ class DDStreamModel:
         # this does not update the broadcasted_var but rather the local copy
         # TODO: Should self.broad_var be global?
 
-        # print(f"BEFORE UPDATE: {self.broadcasted_var} {self.broadcasted_var.value}")
-        # self.broadcasted_var = rdd.context.broadcast((1,2,3,batch_id))
-        # print(f"AFTER UPDATE: {self.broadcasted_var} {self.broadcasted_var.value}")
-        # print()
+        print(f"BEFORE UPDATE: {self.broadcasted_var} {self.broadcasted_var.value}")
+        self.broadcasted_var = rdd.context.broadcast((1,2,3,batch_id))
+        print(f"AFTER UPDATE: {self.broadcasted_var} {self.broadcasted_var.value}")
+        print()
 
         lastEdit = 0
         if not rdd.isEmpty() and self.initialized:

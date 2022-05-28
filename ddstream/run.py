@@ -6,6 +6,7 @@ import argparse
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import *
 from pyspark.sql.types import *
+from pyspark.ml.linalg import DenseVector, Vectors, VectorUDT
 
 
 def parse_args():
@@ -33,9 +34,8 @@ def parse_args():
     return topic, timeout
 
 
-def split_data(streaming_df, database="nsl-kff"):
+def split_data(streaming_df, database="nsl-kdd"):
     # TODO: Find out how to densevector
-    # from pyspark.mllib.linalg import VectorUDT, Vectors
     # from pyspark.ml.feature import VectorAssembler
 
     # TODO: Test correctness
@@ -59,19 +59,27 @@ def split_data(streaming_df, database="nsl-kff"):
     # - https://spark.apache.org/docs/latest/api/python/reference/api/pyspark.ml.linalg.Vectors.html
     # - https://stackoverflow.com/questions/39025707/how-to-convert-arraytype-to-densevector-in-pyspark-dataframe
 
-    data = (
-        streaming_df.withColumn(
-            "tmp", split(col("value"), ",")
-        )  # .map(lambda vals: [float(x) for x in vals])
-        .withColumn("label", col("tmp").getItem(num_cols))
-        .withColumn("features", slice(col("tmp"), 1, num_cols))
-        # .withColumn("other", arraytovector(from_json('value',"array<string>")))
-        # .withColumn("other", toDense(streaming_df.tmp))
+
+    def get_features(arr):
+        res = []
+        for x in range(len(arr) - 1):
+            res.append(float(x))
+        return res
+    
+    # it was DenseVector from Akis but I changed it to VectorUDT() because of https://stackoverflow.com/questions/49623620/what-type-should-the-dense-vector-be-when-using-udf-function-in-pyspark
+    dense_features = udf(lambda arr: Vectors.dense(get_features(arr)), VectorUDT())
+
+    split_df = streaming_df.select(split(streaming_df['value'], ',').alias('array'))
+    return (
+        split_df
+            .withColumn('label', split_df['array'].getItem(num_cols))
+            .withColumn('features', dense_features(split_df['array']))
     )
+
 
     # data = VectorAssembler(inputCols=["features"], outputCol="other").transform(data).select("label", "features", "other")
 
-    return data
+    # return data
 
 
 def get_training_data_exploded(streaming_df, database="nsl-kdd"):
@@ -199,28 +207,43 @@ if __name__ == "__main__":
     # TODO: Might need to change the input to be (key, Vector(doubles)): https://spark.apache.org/docs/latest/api/python/reference/api/pyspark.ml.linalg.DenseVector.html
     # Dense vectors are simply represented as NumPy array objects, so there is no need to covert them for use in MLlib
     #
-
+    print("\n\n")
+    
+    # Not Default (densevector) : 
     # database options : [ 'test', 'nsl-kdd' ]
     data = split_data(input_df, database="test")
-    training_data = data.select("features")  # ArrayType<string>
-
-    # test a broadcast variable
-    # broadcasted_var = ssc.sparkContext.broadcast(('a','b','c'))
+    training_data = data.select("label", "features")  # ArrayType<string>
+    print("DTYPES: ", training_data.dtypes)
     print("\n\n")
-    # print(f"START broadcast: {broadcasted_var} {broadcasted_var.value}")
-    # model = DDStreamModel(broadcasted_var) # maybe we don't need to input broadcasted var
-    model = DDStreamModel(broadcasted_var)
-
-    training_data = get_training_data_exploded(input_df, database="test")
-
+    
     write_stream = (
         training_data.writeStream.trigger(processingTime="5 seconds")
         .outputMode("update")
         .option("truncate", "false")
         .format("console")
-        .foreachBatch(model.run)
+        # .foreachBatch(model.run)
         .start()
     )
+    
+    
+    # Default: 
+    # # test a broadcast variable
+    # broadcasted_var = ssc.sparkContext.broadcast(('a','b','c'))
+    # print(f"START broadcast: {broadcasted_var} {broadcasted_var.value}")
+
+    # #TODO: uncomment: 
+    # model = DDStreamModel(broadcasted_var=broadcasted_var)
+
+    # training_data = get_training_data_exploded(input_df, database="test")
+
+    # write_stream = (
+    #     training_data.writeStream.trigger(processingTime="5 seconds")
+    #     .outputMode("update")
+    #     .option("truncate", "false")
+    #     .format("console")
+    #     .foreachBatch(model.run)
+    #     .start()
+    # )
 
     write_stream.awaitTermination(TIMEOUT)  # end of stream
     # print(f"END broadcast: {broadcasted_var} \t {broadcasted_var.value}")
