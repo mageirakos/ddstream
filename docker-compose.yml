@@ -1,4 +1,4 @@
-version: '3.9'
+version: '3.7'
 
 services:
   zookeeper:
@@ -33,8 +33,11 @@ services:
 
 
   spark-master:
-    image: bde2020/spark-master:3.0.2-hadoop3.2
     container_name: spark-master
+    build:
+      context: .
+      dockerfile: DockerfileMasterNumPy
+    image: spark-master-numpy
     networks: 
       - kafka-spark-net
     ports:
@@ -47,8 +50,11 @@ services:
       - INIT_DAEMON_STEP=setup_spark
 
   spark-worker-1:
-    image: bde2020/spark-worker:3.0.2-hadoop3.2
     container_name: spark-worker-1
+    build:
+      context: .
+      dockerfile: DockerfileWorkerNumPy
+    image: spark-worker-numpy
     networks: 
       - kafka-spark-net
     depends_on:
@@ -61,8 +67,11 @@ services:
       - "SPARK_MASTER=spark://spark-master:7077"
 
   spark-worker-2:
-    image: bde2020/spark-worker:3.0.2-hadoop3.2
     container_name: spark-worker-2
+    build:
+      context: .
+      dockerfile: DockerfileWorkerNumPy
+    image: spark-worker-numpy
     networks: 
       - kafka-spark-net
     depends_on:
@@ -75,8 +84,11 @@ services:
       - "SPARK_MASTER=spark://spark-master:7077"
 
   spark-worker-3:
-    image: bde2020/spark-worker:3.0.2-hadoop3.2
     container_name: spark-worker-3
+    build:
+      context: .
+      dockerfile: DockerfileWorkerNumPy
+    image: spark-worker-numpy
     networks: 
       - kafka-spark-net
     depends_on:
@@ -94,3 +106,4 @@ networks:
 
 volumes:
   shared_data:
+    external: true

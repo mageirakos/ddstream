@@ -1,0 +1,6 @@
+FROM bde2020/spark-worker:3.0.2-hadoop3.2
+
+RUN apk add --update musl-dev linux-headers g++ make cmake
+RUN apk add --update python3-dev
+RUN python3 -m pip install cython
+RUN python3 -m pip install numpy
