@@ -93,7 +93,7 @@ Both servers are java applications. If you are trying to kill them but lost the 
 `$ bin/kafka-consumer-groups.sh --bootstrap-server localhost:9092 --delete --group {consumer group name}`
 
 
-# Scripts
+# Test/Scripts
 
 ## Dummy Spark application subscribed to a Kafka topic:
 Under `/scripts/test_kafka` there is a kafkaListener.py and kafkaProducer.py
@@ -126,3 +126,12 @@ https://www.youtube.com/watch?v=CGT8v8_9i2g
     col_names_clean = ['duration', 'src_bytes', 'dst_bytes', 'wrong_fragment', 'urgent', 'hot', 'num_failed_logins', 'num_compromised', 'root_shell', 'su_attempted', 'num_root', 'num_file_creations', 'num_shells', 'num_access_files', 'count', 'srv_count', 'serror_rate', 'srv_serror_rate', 'rerror_rate', 'srv_rerror_rate', 'same_srv_rate', 'diff_srv_rate', 'srv_diff_host_rate', 'dst_host_count', 'dst_host_srv_count', 'dst_host_same_srv_rate', 'dst_host_diff_srv_rate', 'dst_host_same_src_port_rate', 'dst_host_srv_diff_host_rate', 'dst_host_serror_rate', 'dst_host_srv_serror_rate', 'dst_host_rerror_rate', 'dst_host_srv_rerror_rate', 'cluster']
     ```
 * KDD-99: http://kdd.ics.uci.edu/databases/kddcup99/kddcup99.html
+
+
+
+# Other:
+
+`$ docker compose up -d -build`  
+`/home/imslab/theses/mageirakos`  
+[] permission denied for /docker in `/var/lib/docker/volumes`
+`export PYSPARK_PYTHON=python3`
