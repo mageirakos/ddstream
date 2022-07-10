@@ -4,6 +4,7 @@ from typing import tuple, List, Type
 # TODO: Possible redundancies ( all setters getters are much simples in python by simply accessing/seting with self.)
 # TODO: tfactor also might be redudant
 # TODO: Test code
+# TODO: change List[float] cf1x, cf2x into numpy arrays and do np.multiply instead of the element wise I'm doing now
 class CoreMicroCluster:
     # TODO: add default vals to params
     # TODO: add correct types. eg( cf2x => breeze.linalg.Vector[Double])

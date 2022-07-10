@@ -120,17 +120,20 @@ if __name__ == "__main__":
     # database options : [ 'test', 'nsl-kdd', 'toy', 'init_toy']
     data = split_data(input_df, database=INPUT_DATA)
     training_data = data.select("label", "features")
-    print("DTYPES: ", training_data.dtypes)
-    print("\n\n")
+
 
     # Default:
     # test a broadcast variable
-    broadcasted_var = ssc.sparkContext.broadcast(('a','b','c'))
+    broadcasted_var = ssc.sparkContext.broadcast(("a", "b", "c"))
     print(f"START broadcast: {broadcasted_var} {broadcasted_var.value}")
 
     model = DDStreamModel(broadcasted_var=broadcasted_var)
 
-    write_stream = (
+    initialDataPath = f'./data/init_toy_dataset.csv'
+    initialEpsilon = 0.02
+    model.initDBSCAN(initialEpsilon, initialDataPath)
+
+    training_data_stream = (
         training_data.writeStream.trigger(processingTime="5 seconds")
         .outputMode("update")
         .option("truncate", "false")
@@ -139,7 +142,7 @@ if __name__ == "__main__":
         .start()
     )
 
-    write_stream.awaitTermination(TIMEOUT)  # end of stream
+    training_data_stream.awaitTermination(TIMEOUT)  # end of stream
     # print(f"END broadcast: {broadcasted_var} \t {broadcasted_var.value}")
     print("Stream Data Processing Application Completed.")
-    write_stream.stop()
+    training_data_stream.stop()

@@ -60,8 +60,12 @@ class DDStreamModel:
         # this.Tp = Math.round(1 / this.lambda * Math.log((this.beta * this.mu) / (this.beta * this.mu - 1))) + 1
         pass
 
-    def initDBSCAN(self):
+    def initDBSCAN(self, initialEpsilon, initialDataPath):
         # initialize and broadcast pmc/omc
+        # TODO: Read file -> create vectors/list[float]/numpyarrays of rows in file and do initialization
+        
+
+        
         self.initialized = True
 
     def getNeighborHood(self, pos, epsilon):
@@ -88,7 +92,6 @@ class DDStreamModel:
         if not rdd.isEmpty() and self.initialized:
             t0 = time.time()
             print(f"The time is now {lastEdit}")
-
             assignations = assignToMicroCluster(rdd, self.eps)
 
     def assignToMicroCluster(self, row):
