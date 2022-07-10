@@ -3,6 +3,7 @@ from microcluster import CoreMicroCluster
 # general
 import time
 
+
 class DDStreamModel:
     def __init__(
         self,
