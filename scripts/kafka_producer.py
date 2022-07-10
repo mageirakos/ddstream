@@ -25,7 +25,7 @@ def generate_stream():
             stream = next(reader)
 
         producer.send(topic, bytes(stream, encoding="utf8"))
-        print(f"Sending data to Kafka '{topic}', #{total_processed}")
+        print(f"Sending '{dataset.split('/')[-1]}' to topic '{topic}', #{total_processed}")
 
         total_current_interval += 1
         total_processed += 1
@@ -110,6 +110,8 @@ if __name__ == "__main__":
         "nsl-kdd-scaled": DATA_PATH + "nsl-kdd-clean.txt",
         "kdd-99": DATA_PATH + "",
         "test": DATA_PATH + "test.csv",
+        "toy": DATA_PATH + "toy_dataset.csv",
+        "init_toy": DATA_PATH + "init_toy_dataset.csv",
     }
 
     dataset, rate, time_interval, total_data, num_partitions, topic = parse_args()

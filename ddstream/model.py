@@ -3,7 +3,6 @@ from microcluster import CoreMicroCluster
 # general
 import time
 
-
 class DDStreamModel:
     def __init__(
         self,
@@ -72,11 +71,13 @@ class DDStreamModel:
 
     def run(self, df, batch_id):
         """Run .foreachBatch()"""
-        # print(f"BATCH: {batch_id}", df, end="\n")
-        rdd = df.rdd.map(tuple)  # after this it is like for each rdd...
+        print(f"BATCH: {batch_id}", df, end="\n")
+        rdd = df.rdd.map(tuple)  # after this it is like for each rdd.... Is it?
         # this does not update the broadcasted_var but rather the local copy
         # TODO: Should self.broad_var be global?
 
+        # TODO: It is possible broadcasted_var does not work correctly because the data has
+        #       not yet been .collected() to the "main" in order to do the update?
         print(f"BEFORE UPDATE: {self.broadcasted_var} {self.broadcasted_var.value}")
         self.broadcasted_var = rdd.context.broadcast((1, 2, 3, batch_id))
         print(f"AFTER UPDATE: {self.broadcasted_var} {self.broadcasted_var.value}")

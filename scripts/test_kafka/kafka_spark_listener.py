@@ -2,7 +2,7 @@ from pyspark.sql import SparkSession
 from pyspark.sql.functions import *
 from pyspark.sql.types import *
 
-kafka_topic_name = "weather"
+kafka_topic_name = "test"
 kafka_bootstrap_servers = "localhost:9092"
 
 if __name__ == "__main__":
@@ -19,7 +19,7 @@ if __name__ == "__main__":
         .load()
     )
 
-    print("Printing Schema weather_df: ")
+    print("Printing Schema from test topic: ")
     weather_df.printSchema()
 
     weather_df1 = weather_df.selectExpr(
