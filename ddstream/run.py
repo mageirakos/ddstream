@@ -70,7 +70,6 @@ def split_data(streaming_df, database="nsl-kdd"):
 
     # it was DenseVector from Akis but I changed it to VectorUDT() because of https://stackoverflow.com/questions/49623620/what-type-should-the-dense-vector-be-when-using-udf-function-in-pyspark
     dense_features = udf(lambda arr: Vectors.dense(get_features(arr)), VectorUDT())
-    # dense_features = udf(lambda arr: Vectors.dense(arr[:-1]), VectorUDT())
 
     split_df = streaming_df.select(split(streaming_df["value"], ",").alias("array"))
 
