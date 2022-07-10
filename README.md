@@ -51,11 +51,17 @@ Spark cluster has 1 master and 3 worker nodes.
     * Stop: `$ docker compose down`
 2. Run shell on master node:   
 `$ docker ps --format '{{.ID}} {{.Ports}} {{.Names}}'`  
-`$ docker exec -it <spark-master-id> /bin/bash`
-3. Launch pyspark with 2 cores for each executor (6 in total) and 1GB of RAM:     
+`$ docker exec -it <spark-master-id> /bin/bash`  
+3. Submit application  with 2 cores for each executor (6 in total) and 2GB of RAM (you need to be in `/data` of spark-master):  
+`$ spark-submit --master spark://spark-master:7077 --total-executor-cores 6 --executor-memory 2048m --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.0.2 ddstream/run.py`
+4. On a different terminal with the venv activated have the kafka producer emiting the stream to the correct topic:  
+`$ python3 scripts/kafka_producer.py -s test -r 1 --topic test`
+
+- **Note:** 
+    - For code changes you need to copy the updated code in the shared_data folder which should exist in top level of this project. This is the current volume used in the containers `./shared_data:/data`
+    - Launch pyspark with 2 cores for each executor (6 in total) and 1GB of RAM:     
 `$ pyspark --master spark://localhost:9077 --total-executor-cores 6 --executor-memory 1024m`
-4. Submit application  with 2 cores for each executor (6 in total) and 2GB of RAM:  
-`$ ~/opt/spark/bin/spark-submit --master spark://localhost:9077 --total-executor-cores 6 --executor-memory 2048m --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.0.2 ddstream/run.py`
+
 
 # Run Kafka Cluster
 * Kafka Quickstart: https://kafka.apache.org/quickstart
@@ -129,9 +135,10 @@ https://www.youtube.com/watch?v=CGT8v8_9i2g
 
 
 
-# Other:
+# Other/Todo:
 
-`$ docker compose up -d -build`  
-`/home/imslab/theses/mageirakos`  
-[] permission denied for /docker in `/var/lib/docker/volumes`
+- `$ docker compose up -d -build`  
+
+[ ] create perm volume under `/home/imslab/theses/mageirakos`  
+[ ] permission denied for /docker in `/var/lib/docker/volumes`
 `export PYSPARK_PYTHON=python3`
