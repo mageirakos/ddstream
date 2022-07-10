@@ -116,7 +116,7 @@ if __name__ == "__main__":
 
     reader = file_reader(dataset)
     try:
-        producer = KafkaProducer(bootstrap_servers="localhost:9092")
+        producer = KafkaProducer(bootstrap_servers="localhost:9092") # may need different server
     except:
         print(f"Failed: Make sure Kafka server is running and {topic} topic exists")
         sys.exit()
