@@ -45,8 +45,8 @@ def parse_args():
 
 
 def split_data(streaming_df, database="nsl-kdd"):
-    print("STEP 0: In split_data")
-    """ Change the input stream to be (label, Vector<features>)"""
+    # print("STEP 0: In split_data")
+    """Change the input stream to be (label, Vector<features>)"""
     if database == "nsl-kdd":
         num_feats = 33
     elif database == "test":
@@ -61,11 +61,11 @@ def split_data(streaming_df, database="nsl-kdd"):
         features : first n-1 columns of the array
         label    : last column in the aray
         """
-        print("STEP 1: In get_features")
+        # print("STEP 1: In get_features")
         res = []
         for i in range(len(arr) - 1):
             res.append(float(arr[i]))
-        print(f"\n\nfeatures: {res}\n\n")
+        # print(f"\n\nfeatures: {res}\n\n")
         return res
 
     # it was DenseVector from Akis but I changed it to VectorUDT() because of https://stackoverflow.com/questions/49623620/what-type-should-the-dense-vector-be-when-using-udf-function-in-pyspark
@@ -73,11 +73,11 @@ def split_data(streaming_df, database="nsl-kdd"):
 
     split_df = streaming_df.select(split(streaming_df["value"], ",").alias("array"))
 
-    print(f"SPLIT_DF:{split_df}")
+    # print(f"SPLIT_DF:{split_df}")
     result = split_df.withColumn(
         "label", split_df["array"].getItem(num_feats)
     ).withColumn("features", dense_features(split_df["array"]))
-    print("STEP 2: Leaving split_data")
+    # print("STEP 2: Leaving split_data")
     return result
 
 
@@ -121,7 +121,6 @@ if __name__ == "__main__":
     data = split_data(input_df, database=INPUT_DATA)
     training_data = data.select("label", "features")
 
-
     # Default:
     # test a broadcast variable
     broadcasted_var = ssc.sparkContext.broadcast(("a", "b", "c"))
@@ -129,9 +128,11 @@ if __name__ == "__main__":
 
     model = DDStreamModel(broadcasted_var=broadcasted_var)
 
-    initialDataPath = f'./data/init_toy_dataset.csv'
-    initialEpsilon = 0.02
-    model.initDBSCAN(initialEpsilon, initialDataPath)
+    # TODO: Decide what to do with the initDBSCAN
+    initialDataPath = f"./data/init_toy_dataset.csv"  # must be path in container file tree (shared volume)
+    # TODO: set initialEpsilon to 0.02
+    initialEpsilon = 0.5
+    model.initDBSCAN(ssc, initialEpsilon, initialDataPath)
 
     training_data_stream = (
         training_data.writeStream.trigger(processingTime="5 seconds")
