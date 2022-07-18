@@ -12,7 +12,7 @@ class DDStreamModel:
         # TODO: set epsilon = 16
         epsilon=16.0,
         # TODO: set minPoints = 10.0
-        minPoints=2.0,
+        minPoints=5.0,
         beta=0.2,
         mu=10.0,
         lmbda=0.25,
@@ -91,8 +91,7 @@ class DDStreamModel:
         self.initArr = self.initArr.reshape((-1, num_of_dimensions))
 
         print(f"Number of dimensions: {num_of_dimensions}")
-        print(f"Number of initialized data points: {num_of_datapts}")
-        print(f"Initialize the microcluster dataset size: {len(self.initArr)}")
+        print(f"Number of initialization data points: {num_of_datapts}")
         assert num_of_datapts == len(self.initArr)  # float64
 
         # 2. Create core micro clusters
@@ -100,9 +99,9 @@ class DDStreamModel:
         for i in range(num_of_datapts):
             # get neighborhood of this specific data point which has X dimensions
             neighborHoodList = self.getNeighborHood(i, initialEpsilon)
-            print(
-                f"\nCHECK 1 : len(neighborHoodList) > self.minPoints = {len(neighborHoodList)} > {self.minPoints}"
-            )
+            # print(
+            #     f"\nCHECK 1 : len(neighborHoodList) > self.minPoints = {len(neighborHoodList)} > {self.minPoints}"
+            # )
             if len(neighborHoodList) > self.minPoints:
                 self.tag[0] = 1
                 # new microcluster for a core data point ( since neighborhood > minpts)
@@ -125,7 +124,7 @@ class DDStreamModel:
             list(zip(self.pMicroClusters, range(len(self.pMicroClusters))))
         )
         print(
-            f"self.broadcastPMic (after) = {self.broadcastPMic} {self.broadcastPMic.value}"
+            f"broadcastPMic (after) = {self.broadcastPMic} \n {self.broadcastPMic.value}"
         )
 
         # TODO: Check if we need to initialize the outlierMC as well
@@ -152,7 +151,7 @@ class DDStreamModel:
         :param pos       = index of point we wish to calculate the neighborhood of (point = self.initArr[pos])
         :output idBuffer = list of indices (i) of points in self.initArr[] within the neighborhood of point = self.initArr[pos]
         """
-        print("\n\tIn getNeighborHood")
+        # print("\n\tIn getNeighborHood")
         idBuffer = []
         # for all datapoints
         # print(f"self.initArr = {self.initArr}\nlen(self.initArr) = {len(self.initArr)}")
@@ -190,17 +189,17 @@ class DDStreamModel:
         :param newMC            = CoreMicroCluster to be expanded
         :param neighborHoodList = List of neighbor indices (for self.initArr) to be added to the CoreMicroCluster
         """
-        print("\n\tIn expandCluster:")
+        # print("\n\tIn expandCluster:")
         for neighbor in neighborHoodList:
-            print(f"self.tag[neighbor] = {self.tag[neighbor]}")
+            # print(f"self.tag[neighbor] = {self.tag[neighbor]}")
             self.tag[neighbor] = 1
-            print(f" (after) self.tag[neighbor] = {self.tag[neighbor]}")
+            # print(f" (after) self.tag[neighbor] = {self.tag[neighbor]}")
 
         # recursively expand the cluster based on newly added points
         for neighbor in neighborHoodList:
             newMC.insert(point=self.initArr[neighbor], time=0, n=1.0)
 
-            print(f"neighbor = {neighbor}\nneighborHoodList = {neighborHoodList}")
+            # print(f"neighbor = {neighbor}\nneighborHoodList = {neighborHoodList}")
             neighborHoodList2 = self.getNeighborHood(neighbor, initialEpsilon)
             if len(neighborHoodList2) > self.minPoints:
                 self.expandCluster(newMC, neighborHoodList2, initialEpsilon)

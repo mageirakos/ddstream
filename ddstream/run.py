@@ -130,7 +130,7 @@ if __name__ == "__main__":
 
     # TODO: Decide what to do with the initDBSCAN
     initialDataPath = f"./data/init_toy_dataset.csv"  # must be path in container file tree (shared volume)
-    # TODO: set initialEpsilon to 0.02
+    # TODO: set initialEpsilon to 0.02 (after we standardise)
     initialEpsilon = 0.5
     model.initDBSCAN(ssc, initialEpsilon, initialDataPath)
 
@@ -144,6 +144,6 @@ if __name__ == "__main__":
     )
 
     training_data_stream.awaitTermination(TIMEOUT)  # end of stream
-    # print(f"END broadcast: {broadcasted_var} \t {broadcasted_var.value}")
+    print(f"END broadcast: {broadcasted_var} \t {broadcasted_var.value}")
     print("Stream Data Processing Application Completed.")
     training_data_stream.stop()
