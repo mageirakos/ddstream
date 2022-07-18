@@ -11,7 +11,9 @@ from pyspark.sql.types import *
 from pyspark.ml.linalg import DenseVector, Vectors, VectorUDT
 
 
+# TODO: Use all of the arguments in the code outside of parse_args
 def parse_args():
+    # TODO: enhance with all additional arguments I am missing like epsilon, batch time etc.
     # Parse cli arguments
     parser = argparse.ArgumentParser(
         description="""This is the script responsible for running DDStream"""
@@ -19,17 +21,136 @@ def parse_args():
     required = parser.add_argument_group("required arguments")
     optional = parser.add_argument_group("optional arguments")
 
+    # TODO: For all arguments understand what they are and where they are used
+    optional.add_argument(
+        "--batchTime",
+        default="5",
+        type=int,
+        help="Batch Time (default '5')",
+    )
+    optional.add_argument(
+        "--appName",
+        default="ddstream",
+        help="Application name (default 'ddstream')",
+    )
+    optional.add_argument(
+        "--numDimensions",
+        default="80",
+        type=int,
+        help="Number of dimensions (default '80')",
+    )
+    optional.add_argument(
+        "--speedRate",
+        default="1000",
+        type=int,
+        help="Speed Rate input (default '1000')",
+    )
+    # The number of initialData should be the same as the flow rate
+    optional.add_argument(
+        "--initialDataAmount",
+        default="2500",
+        type=int,
+        help="Initial data amount (default '2500')",
+    )
+    optional.add_argument(
+        "--lmbda",
+        default="0.25",
+        type=float,
+        help="Lambda (default '0.25')",
+    )
+    optional.add_argument(
+        "--epsilon",
+        default="16",
+        type=int,
+        help="epsilon (default '16')",
+    )
+    optional.add_argument(
+        "--initialEpsilon",
+        default="0.02",
+        type=float,
+        help="Initial epsilon (default '0.02')",
+    )
+    optional.add_argument(
+        "--mu",
+        default="10.0",
+        type=float,
+        help="mu (default '10.0')",
+    )
+    optional.add_argument(
+        "--beta",
+        default="0.2",
+        type=float,
+        help="beta (default '0.2')",
+    )
+    optional.add_argument(
+        "--tfactor",
+        default="1.0",
+        type=float,
+        help="tfactor (default '1.0')",
+    )
+    # TODO: Fix
+    optional.add_argument(
+        "--initialDataPath",
+        default="",
+        help="Initial data path (default '')",
+    )
+    optional.add_argument(
+        "--offlineEpsilon",
+        default="16.0",
+        type=float,
+        help="offline epsilon (default '16.0')",
+    )
+    # TODO: What is this where is it used
+    optional.add_argument(
+        "--trainingDataAmount",
+        default="100",
+        help="Training data amount (default '100')",
+    )
+    # TODO: What?
+    optional.add_argument(
+        "--osTr",
+        default="",
+        help="osTr (default '')",
+    )
+    optional.add_argument(
+        "--k",
+        default="5",
+        type=int,
+        help="k (default '5')",
+    )
+    # TODO: What?
+    optional.add_argument(
+        "--cmDataPath",
+        default="/",
+        help="cmDataPath (default '/')",
+    )
+    optional.add_argument(
+        "--offlineMu",
+        default="10.0",
+        type=float,
+        help="Offline mu (default '10.0')",
+    )
+    # TODO: what?
+    optional.add_argument(
+        "--check",
+        default="1",
+        type=int,
+        help="check  (default '1')",
+    )
+    # inputPath
     optional.add_argument(
         "-d",
         "--dataset",
         default="test",
         help="Dataset input (default 'test')",
     )
+    # trainingTopic
     optional.add_argument(
         "--topic",
         default="test",
         help="Kafka topic (default 'test')",
     )
+    # timeout
     optional.add_argument(
         "-t",
         "--timeout",
@@ -38,10 +159,54 @@ def parse_args():
         help="Timeout of streaming application (default 10 seconds)",
     )
     args = parser.parse_args()
-    input_data = args.dataset
-    topic = args.topic
+
+    batchTime = args.batchTime
+    appName = args.appName
+    numDimensions = args.numDimensions
+    speedRate = args.speedRate
+    initialDataAmount = args.initialDataAmount
+    lmbda = args.lmbda
+    epsilon = args.epsilon
+    initialEpsilon = args.initialEpsilon
+    mu = args.mu
+    beta = args.beta
+    tfactor = args.tfactor
+    initialDataPath = args.initialDataPath
+    offlineEpsilon = args.offlineEpsilon
+    trainingDataAmount = args.trainingDataAmount
+    osTr = args.osTr
+    k = args.k
+    cmDataPath = args.cmDataPath
+    offlineMu = args.offlineMu
+    check = args.check
+
+    inputPath = args.dataset
+    trainingTopic = args.topic
     timeout = args.timeout
-    return input_data, topic, timeout
+    return (
+        batchTime,
+        appName,
+        numDimensions,
+        speedRate,
+        initialDataAmount,
+        lmbda,
+        epsilon,
+        initialEpsilon,
+        mu,
+        beta,
+        tfactor,
+        initialDataPath,
+        offlineEpsilon,
+        trainingDataAmount,
+        osTr,
+        k,
+        cmDataPath,
+        offlineMu,
+        check,
+        inputPath,
+        trainingTopic,
+        timeout,
+    )
 
 
 def split_data(streaming_df, database="nsl-kdd"):
@@ -89,7 +254,31 @@ def print_field_dtypes(streaming_df):
 
 if __name__ == "__main__":
 
-    INPUT_DATA, TOPIC, TIMEOUT = parse_args()
+    (
+        BATCH_TIME,
+        APP_NAME,
+        NUM_DIMENSIONS,
+        SPEED_RATE,
+        INITIAL_DATA_AMOUNT,
+        LAMBDA,
+        EPSILON,
+        INITIAL_EPSILON,
+        MU,
+        BETA,
+        TFACTOR,
+        INITIAL_DATA_PATH,
+        OFFLINE_EPSILON,
+        TRAINING_DATA_AMAOUNT,
+        OS_TR,
+        K,
+        CM_DATA_PATH,
+        OFFLINE_MU,
+        CHECK,
+        INPUT_DATA,
+        TOPIC,
+        TIMEOUT,
+    ) = parse_args()
+
 
     ssc = SparkSession.builder.appName("ddstream").getOrCreate()
     # TODO: not sure this works correctly
