@@ -1,12 +1,10 @@
 import math
 from typing import List
 
-# TODO: Possible redundancies ( all setters getters are much simples in python by simply accessing/seting with self.)
+# TODO: Possible redundancies/stuff we don't need
 # TODO: tfactor also might be redudant
 # TODO: Test code
 
-# SOS TODO:
-# TODO: change List[float] cf1x, cf2x into numpy arrays and do np.multiply instead of the element wise I'm doing now
 class CoreMicroCluster:
     # TODO: add default vals to params
     # TODO: cf2x is element wise multiplication. but on the paper they say weighted SUM of product
@@ -37,7 +35,7 @@ class CoreMicroCluster:
         self.weight = weight
         self.t0 = t0
         self.lastEdit = lastEdit
-        self.lmbda = lmbda  # lmbda != lambda (careful how I name my variables)
+        self.lmbda = lmbda
         self.tfactor = tfactor
 
     def calcCf2x(self, dt):
@@ -81,7 +79,7 @@ class CoreMicroCluster:
             self.setWeight(0, t)
             return self.weight
 
-    def getWeight(self):  # second getWeight func
+    def getWeight(self):
         return self.weight
 
     def getCentroid(self):
@@ -92,10 +90,8 @@ class CoreMicroCluster:
         else:
             return self.cf1x
 
-    # TODO: Understand this function
     # TODO: What is tfactor
     # - it is usually set to 1.0
-    # TODO: Change this funciton based on numpyarray cf2x and cf1x
     def getRMSD(self) -> float:
         """Get radius of p-micro cluster (Definition 3.4 - Cao et al.)"""
         if self.weight > 1:
