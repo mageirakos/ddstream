@@ -5,6 +5,8 @@ from model import DDStreamModel
 import argparse
 from pyspark.sql import SparkSession
 
+# import numpy as np
+
 # from pyspark.sql import udf
 from pyspark.sql.functions import *
 from pyspark.sql.types import *
@@ -209,6 +211,8 @@ def parse_args():
     )
 
 
+# TODO: Might need to change again into numpy array instead of typical "Vector"
+# or do it later when calling DBSCAN from sklearn? http://blog.madhukaraphatak.com/spark-vector-to-numpy/
 def split_data(streaming_df, database="nsl-kdd"):
     # print("STEP 0: In split_data")
     """Change the input stream to be (label, Vector<features>)"""
@@ -233,15 +237,17 @@ def split_data(streaming_df, database="nsl-kdd"):
         # print(f"\n\nfeatures: {res}\n\n")
         return res
 
-    # it was DenseVector from Akis but I changed it to VectorUDT() because of https://stackoverflow.com/questions/49623620/what-type-should-the-dense-vector-be-when-using-udf-function-in-pyspark
+    # https://stackoverflow.com/questions/49623620/what-type-should-the-dense-vector-be-when-using-udf-function-in-pyspark
     dense_features = udf(lambda arr: Vectors.dense(get_features(arr)), VectorUDT())
-
-    split_df = streaming_df.select(split(streaming_df["value"], ",").alias("array"))
-
+    # np array # dense_features = udf(lambda arr: np.array(get_features(arr)))
+    split_df = streaming_df.select(
+        streaming_df["key"].cast("Long"),
+        split(streaming_df["value"], ",").alias("full_input_array"),
+    )
     # print(f"SPLIT_DF:{split_df}")
     result = split_df.withColumn(
-        "label", split_df["array"].getItem(num_feats)
-    ).withColumn("features", dense_features(split_df["array"]))
+        "label", split_df["full_input_array"].getItem(num_feats)
+    ).withColumn("features", dense_features(split_df["full_input_array"]))
     # print("STEP 2: Leaving split_data")
     return result
 
@@ -279,15 +285,17 @@ if __name__ == "__main__":
         TIMEOUT,
     ) = parse_args()
 
-
     ssc = SparkSession.builder.appName("ddstream").getOrCreate()
     # TODO: not sure this works correctly
     ssc.sparkContext.setLogLevel("WARN")
     # TODO: All local files need to be added like so:
     ssc.sparkContext.addPyFile("ddstream/model.py")
+    ssc.sparkContext.addPyFile("ddstream/microcluster.py")
 
     # Streaming Query
-    # TODO: Maybe using StreamingListener is important (https://spark.apache.org/docs/2.2.0/api/python/pyspark.streaming.html)
+    # TODO: Maybe using StreamingListener is a must (I need it to print some results )
+    # https://spark.apache.org/docs/2.2.0/api/python/pyspark.streaming.html
+    # https://www.youtube.com/watch?v=iqIdmCvSwwU
 
     input_df = (
         ssc.readStream.format("kafka")
@@ -300,39 +308,75 @@ if __name__ == "__main__":
     input_df1 = input_df.selectExpr(
         "CAST(key AS STRING)", "CAST(value AS STRING)", "timestamp"
     )
+    # random_stream = (
+    #     input_df.writeStream.trigger(processingTime="5 seconds")
+    #     .outputMode("update")
+    #     .option("truncate", "false")
+    #     .format("console")
+    #     # .foreachBatch(model.run)
+    #     .start()
+    # )
+    # random_stream.awaitTermination(TIMEOUT)  # end of stream
+    # random_stream.stop()
 
-    # TODO: Might need to change the input to be (key, Vector(doubles)): https://spark.apache.org/docs/latest/api/python/reference/api/pyspark.ml.linalg.DenseVector.html
+    # input should be (key, Vector(doubles)): https://spark.apache.org/docs/latest/api/python/reference/api/pyspark.ml.linalg.DenseVector.html
+    # TODO: Might need to change again into numpy array instead of typical "Vector"
+    # --- but by vector(doubles) in Python I mean -> numpy Array
     # Dense vectors are simply represented as NumPy array objects, so there is no need to covert them for use in MLlib
     #
-    print("\n\n")
+    print("\n")
 
     # database options : [ 'test', 'nsl-kdd', 'toy', 'init_toy']
-    data = split_data(input_df, database=INPUT_DATA)
-    training_data = data.select("label", "features")
+    data = split_data(input_df1, database=INPUT_DATA)
+    # # For testing:
+    # random_stream = (
+    #     data.writeStream.trigger(processingTime="5 seconds")
+    #     .outputMode("update")
+    #     .option("truncate", "false")
+    #     .format("console")
+    #     # .foreachBatch(model.run)
+    #     .start()
+    # )
+    # random_stream.awaitTermination(TIMEOUT)  # end of stream
+    # random_stream.stop()
+
+    # TODO: We don't need the label on the training data
+    testing_data = data.select("key", "label", "features")
+    training_data = data.select("key", "features")
 
     # Default:
     # test a broadcast variable
-    broadcasted_var = ssc.sparkContext.broadcast(("a", "b", "c"))
-    print(f"START broadcast: {broadcasted_var} {broadcasted_var.value}")
+    # broadcasted_var = ssc.sparkContext.broadcast(("a", "b", "c"))
+    # print(f"START broadcast: {broadcasted_var} {broadcasted_var.value}")
+    # model = DDStreamModel(broadcasted_var=broadcasted_var)
 
-    model = DDStreamModel(broadcasted_var=broadcasted_var)
+    model = DDStreamModel()
 
+    # Step 1. Initialize Micro Clusters
     # TODO: Decide what to do with the initDBSCAN
-    initialDataPath = f"./data/init_toy_dataset.csv"  # must be path in container file tree (shared volume)
+    initialDataPath = "./data/init_toy_dataset.csv"  # must be path in container file tree (shared volume)
     # TODO: set initialEpsilon to 0.02 (after we standardise)
     initialEpsilon = 0.5
     model.initDBSCAN(ssc, initialEpsilon, initialDataPath)
 
+    # Step 2. Start Training Stream
+    print("\nSTART TRAINING\n")
     training_data_stream = (
         training_data.writeStream.trigger(processingTime="5 seconds")
         .outputMode("update")
         .option("truncate", "false")
         .format("console")
-        # .foreachBatch(model.run)
+        .foreachBatch(model.run)
         .start()
     )
 
+    # TODO: Step 3. Print Results (info kept on streaming linstener)
+    # https://www.youtube.com/watch?v=iqIdmCvSwwU
+
     training_data_stream.awaitTermination(TIMEOUT)  # end of stream
-    print(f"END broadcast: {broadcasted_var} \t {broadcasted_var.value}")
-    print("Stream Data Processing Application Completed.")
     training_data_stream.stop()
+
+    # print(f"END broadcast: {broadcasted_var} \t {broadcasted_var.value}")
+    print(f"END broadcastPMic: {model.broadcastPMic} \t {model.broadcastPMic.value}")
+
+    print("Stream Data Processing Application Completed.")

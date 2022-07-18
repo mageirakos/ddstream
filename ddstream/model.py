@@ -1,16 +1,16 @@
 from microcluster import CoreMicroCluster
 
 # general
-import time, math
+import time, math, copy
 import numpy as np
 
 
 class DDStreamModel:
     def __init__(
         self,
-        broadcasted_var,
-        # TODO: set epsilon = 16
-        epsilon=16.0,
+        # broadcasted_var,
+        # TODO: original: epsilon=16.0,
+        epsilon=16,
         # TODO: set minPoints = 10.0
         minPoints=5.0,
         beta=0.2,
@@ -18,9 +18,9 @@ class DDStreamModel:
         lmbda=0.25,
         Tp=2,
     ):
-        self.broadcasted_var = broadcasted_var
+        # self.broadcasted_var = broadcasted_var
 
-        # TODO: check
+        # TODO: check correct initialization etc.
         self.eps = 0.01
 
         self.time = 0
@@ -76,7 +76,7 @@ class DDStreamModel:
         :param initialEpsilon   =
         :param path             = must be path to container volume that cointaines initialization data
         """
-
+        print("START of Initialization")
         # 1. Read init data file
         with open(path) as f:
             lines, initLabels = f.readlines(), []
@@ -126,6 +126,8 @@ class DDStreamModel:
         print(
             f"broadcastPMic (after) = {self.broadcastPMic} \n {self.broadcastPMic.value}"
         )
+        # for mc in self.broadcastPMic.value:
+        #     print(f"MC: {mc[0]}\n  weight: {mc[0].weight}")
 
         # TODO: Check if we need to initialize the outlierMC as well
         # self.broadcastOMic = ssc.sparkContext.broadcast(
@@ -138,7 +140,7 @@ class DDStreamModel:
         print(f"Points not added to MicroClusters = {not_in_mc}")
 
         self.initialized = True
-        print("The initialization is complete\n")
+        print("END of Initialization\n")
 
     # TODO: Is this only used in initialization?
     # - I think yes
@@ -165,10 +167,11 @@ class DDStreamModel:
                 # print("-> YES")
 
                 # TODO: Figure out appropriate epsilon based on distance. ( Need to normalize init data )
-                
+
                 # Euclidean distance is calculated correctly: https://stackoverflow.com/questions/1401712/how-can-the-euclidean-distance-be-calculated-with-numpy
                 # print("Calculate distance: ")
                 # print(f"A:self.initArr[pos] - self.initArr[i] = {self.initArr[pos]} - {self.initArr[i]} = {self.initArr[pos] - self.initArr[i]}")
+                # TODO: Possible problem look into https://stackoverflow.com/questions/66806583/np-linalg-norm-ord-2-not-giving-euclidean-norm
                 dist = np.linalg.norm(self.initArr[pos] - self.initArr[i])
                 total_dist += dist
                 # print(f"dist: np.linalg.norm(A) = {dist} < epsilon = {epsilon}", end="")
@@ -197,38 +200,111 @@ class DDStreamModel:
 
         # recursively expand the cluster based on newly added points
         for neighbor in neighborHoodList:
-            newMC.insert(point=self.initArr[neighbor], time=0, n=1.0)
+            newMC.insertAtT(point=self.initArr[neighbor], time=0, n=1.0)
 
             # print(f"neighbor = {neighbor}\nneighborHoodList = {neighborHoodList}")
             neighborHoodList2 = self.getNeighborHood(neighbor, initialEpsilon)
             if len(neighborHoodList2) > self.minPoints:
                 self.expandCluster(newMC, neighborHoodList2, initialEpsilon)
 
-    def run(self, df, batch_id):
+    # TODO: Make sure that createing multiple rdd.contect.broadcast() objects is not a problem
+    # and that all the workers use the same one
+    # TODO: It is possible broadcasted_var does not work correctly because the data has
+    # not yet been .collected() to the "main" in order to do the update?
+
+    def run(self, streaming_df, batch_id):
         """Run .foreachBatch()"""
-        print(f"BATCH: {batch_id}", df, end="\n")
-        rdd = df.rdd.map(tuple)  # after this it is like for each rdd.... Is it?
-        # this does not update the broadcasted_var but rather the local copy
-        # TODO: Should self.broad_var be global?
+        print(f"BATCH: {batch_id}", streaming_df, end="\n")
+        # Step 0: Initializatino of Micro Clusters must have already been done
+        # Step 1: Split to each rdd
+        #: why the tuple? -> to get rid of Row(..) https://intellipaat.com/community/7578/how-to-convert-a-dataframe-back-to-normal-rdd-in-pyspark
+        rdd = streaming_df.rdd.map(tuple)
+        # # only for printing:
+        # to_be_printed = rdd.collect()
+        # for row in to_be_printed:
+        #     print(f"rdd: _1 = {str(row[0])} , _2 = {str(row[1])}, all = {str(row)}")
 
-        # TODO: It is possible broadcasted_var does not work correctly because the data has
-        #       not yet been .collected() to the "main" in order to do the update?
-        print(f"BEFORE UPDATE: {self.broadcasted_var} {self.broadcasted_var.value}")
-        self.broadcasted_var = rdd.context.broadcast((1, 2, 3, batch_id))
-        print(f"AFTER UPDATE: {self.broadcasted_var} {self.broadcasted_var.value}")
-        print()
-
-        lastEdit = 0
+        # Step 2: Make sure batch is not empty and p-mc have been initialized
         if not rdd.isEmpty() and self.initialized:
             t0 = time.time()
-            print(f"The time is now {lastEdit}")
-            assignations = assignToMicroCluster(rdd, self.eps)
+            print(f"The time is now: {self.lastEdit}")
 
-    def assignToMicroCluster(self, row):
-        if len(self.broadcasted_var.value) > 5:
-            print("\n\nHERE\n\n")
-        print(f"row assigned to micro cluster {row}")
-        return (0, row)
+            # Step 3: Assign each point in the rdd to closest micro cluster (if radius<epsilon)
+            assignations = self.assignToMicroCluster(rdd)
+            # # only for printing:
+            # to_be_printed = assignations.collect()
+            # for row in to_be_printed:
+            #     print(f"assignations : minIndex={str(row[0])} , a={str(row[1])}")
+            # TODO: understand updateMicroClusters()
+            self.updateMicroClusters(assignations)
+
+    def assignToMicroCluster(self, rdd):
+        """
+        Assign each point in the batch to a pMicroCluster.
+        :param rdd       : (key, <features>)
+        :return rdd      : (minIndex, (key, <features>))
+        :return minIndex : index of closest microcluster ( -1 indicates no assignment)
+        """
+        print("In assignToMicroCluster")
+        # STEP 1: For each element in the RDD
+        # print(f"broadcastPMIC: {self.broadcastPMic} {self.broadcastPMic.value} {len(self.broadcastPMic.value)}")
+        # print(f"{self.broadcastPMic.value[-1][0]}")
+        # TODO: Why print not work in assign() -> because in map??
+        def assign(a):
+            """:param a : point/row in batch format=(None, DenseVector([<features>]))"""
+            # TODO: check if correct:
+            # TODO: Maybe we need to turn it back to DenseVector at the end of the function
+            a = a[0], a[1].toArray()
+
+            minDist, minIndex = float("inf"), -1
+            # TODO: init pcopy
+            # Step 2: if there are p microclusters
+            tmp = []
+            if len(self.broadcastPMic.value) > 0:
+                for mc in self.broadcastPMic.value:
+                    # https://spark.apache.org/docs/latest/api/python/reference/api/pyspark.mllib.linalg.DenseVector.html#pyspark.mllib.linalg.DenseVector.toArray
+                    # squaredDistance equivalent
+                    # TODO: Possible problem look into https://stackoverflow.com/questions/66806583/np-linalg-norm-ord-2-not-giving-euclidean-norm
+                    # Step 3: Calculate squared distances of point from centroids of each microcluster
+                    dist = np.linalg.norm(a[1] - mc[0].getCentroid())  # ** 2
+                    tmp.append(round(dist, 1))
+                    if dist < minDist:
+                        minDist, minIndex = dist, mc[1]
+
+                    # mc = {mc_location, index}
+                    # get the distance between the current point and the center of the microcluster
+                    # TODO: what is a[1] here? -> features?
+                    # dist = self.squaredDistance(a[1], mc[0].getCentroid)
+
+                # TODO: Understand this
+                # Step 4: Create a copy of the closest p microcluster to the point and insert it into it
+                # pcopy = copy.deepcopy(self.broadcastPMic.value[minIndex][0])
+
+                pcopy = self.broadcastPMic.value[minIndex][0].copy()
+                n = 0
+                # with open('blah.txt','a') as f:
+                #     n += 1
+                #     f.write(f"n={n} bPMic.value[{minIndex}][0] = {self.broadcastPMic.value[minIndex][0]} weight = {self.broadcastPMic.value[minIndex][0].weight}\n")
+                #     f.write(f"n={n} pcopy={pcopy}, weight = {pcopy.weight}\n")
+                #     f.write(f"n={n} inserting...\n")
+
+                pcopy.insert(a, 1)
+                # pcopy.insertAtT(a[1], a[0], 1)
+                # with open('blah.txt','a') as f:
+                #     n += 1
+                #     f.write(f"n={n} after insert after RMSD\n")
+                #     f.write(f"n={n}pcopy={pcopy}, weight = {pcopy.weight}\n")
+                #     f.write(f"n={n}pcopy RMSD={pcopy.getRMSD()}\n")
+
+                # Step 5: If the radius of this microcluster is larger than the epsilon then reset the minIndex (i.e the point is not inserted)
+                # - we still need to insert the point to the microcluster in the future
+                # - this only returns a tuple of (index_of_closest_mc, point) === (minIndex, a)
+                if pcopy.getRMSD() > self.epsilon:
+                    print("TRUE: pcopy.getRMSD() > self.epsilon")
+                    minIndex = -1
+            return minIndex, a, minDist, pcopy.getRMSD(), self.epsilon, tmp
+
+        return rdd.map(lambda a: assign(a))
 
     def assignToOutlierCluster(self):
         pass
@@ -236,9 +312,39 @@ class DDStreamModel:
     def computeDelta(self):
         pass
 
+    # TODO: Understand and code up function.
     def updateMicroClusters(self, assignations):
-        print(f"update_mc {assignations}")
-        pass
+        print("In updateMicroClusters")
+        # all are RDD[(Int, (<key>Long, Vector[<features(Double)>]))]:
+        # dataInPmic = None
+        # dataInAndOut = None
+        # dataOut = None
+        # dataInOmic = None
+        # outliers = None
+
+        # why persist: https://stackoverflow.com/questions/31002975/how-to-use-rdd-persist-and-cache
+        assignations.persist()
+        to_be_printed = assignations.collect()
+        for row in to_be_printed:
+            print(f"assignations: {str(row)}")
+
+        print("Step 1")
+        # Step 1: filter out the points that were not assigned to any microcluster
+        dataInPmic = assignations.filter(lambda x: x[0] != -1)
+        to_be_printed = dataInPmic.collect()
+        for row in to_be_printed:
+            print(f"dataInPmic: {str(row)}")
+
+        # TODO: write aggregateFunction if needed:
+        # aggregateFunction = lambda x: pass
+
+        # Step 2: Sort the data assigned to Pmic based on arrival order
+        # TODO: fix this:
+        # print("Step 2")
+        # sortedRDD = dataInPmic.groupByKey()#.mapValues(lambda x: x.toList.sortBy(key=x[0]))
+        # to_be_printed = sortedRDD.collect()
+        # for row in to_be_printed:
+        #     print(f"sortedRDD:  {str(row)}")
 
     def ModelDetect(self):
         pass

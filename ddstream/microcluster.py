@@ -5,6 +5,7 @@ from typing import List
 # TODO: tfactor also might be redudant
 # TODO: Test code
 
+
 class CoreMicroCluster:
     # TODO: add default vals to params
     # TODO: cf2x is element wise multiplication. but on the paper they say weighted SUM of product
@@ -65,7 +66,16 @@ class CoreMicroCluster:
         self.lastEdit = t
         # TODO: what is n? Is it the number of points merged to the cluster during last dt? (I think yes)
         #                   or is n in (0,1) depending on notmerge/merge
+        # temp = self.weight
         self.weight = self.weight * math.pow(2, -self.lmbda * dt) + n
+        # # print(f"NEW WEIGHT: {self.weight} MC: {self}\n")
+        # with open('blah.txt','a') as f:
+        #     f.write(f"in setWeight\n")
+        #     f.write(f"n={n}, t={t}\n")
+        #     f.write(f"weight before = {temp}\n")
+        #     f.write(f"self.weight * math.pow(2, -self.lmbda * dt) + n = {temp} * {math.pow(2, -self.lmbda * dt)} + {n}\n")
+        #     f.write(f"lambda={self.lmbda}, dt={dt}, -lmbda*dt={-self.lmbda * dt}, 2**(-lmbda*dt){2**(-self.lmbda * dt)}, math.pow(2,-lmbda*dt)={math.pow(2, -self.lmbda * dt)}, rounded()={round(math.pow(2, -self.lmbda * dt), 2)}\n")
+        #     f.write(f"weight after = {self.weight}\n")
         self.calcCf1x(dt)
         self.calcCf2x(dt)
 
@@ -92,8 +102,12 @@ class CoreMicroCluster:
 
     # TODO: What is tfactor
     # - it is usually set to 1.0
-    def getRMSD(self) -> float:
+    def getRMSD(self):
         """Get radius of p-micro cluster (Definition 3.4 - Cao et al.)"""
+        # with open('blah.txt','a') as f:
+        #     n+=1
+        #     f.write(f"In getRMSD\n")
+        #     f.write(f"self={self}, weight = {self.weight}\n")
         if self.weight > 1:
             sumi, maxi = 0, 0
             for i in range(len(self.cf2x)):
@@ -110,25 +124,30 @@ class CoreMicroCluster:
     def copy(self):
         # TODO: Redandunt can use copy.deepcopy?
         return CoreMicroCluster(
-            self.cf2x,
-            self.cf1x,
-            self.weight,
-            self.t0,
-            self.lastEdit,
-            self.lmbda,
-            self.tfactor,
+            cf2x=self.cf2x,
+            cf1x=self.cf1x,
+            weight=self.weight,
+            t0=self.t0,
+            lastEdit=self.lastEdit,
+            lmbda=self.lmbda,
+            tfactor=self.tfactor,
         )
 
     # TODO: Fix this as point is some sort of np array
     # TODO: See where this is used
+    # point: ((None, DenseVector(<features>)),1) ?
     # point: (timestamp, list[float])
-    def insert(self, point: tuple((int, List[float])), n: float):
-        self.setWeight(n, point[0])
-        self.setCf1x([a + p for a, p in zip(self.cf1x, point[1])])
-        self.setCf2x([a + p * p for a, p in zip(self.cf2x, point[1])])
+    def insert(self, point, n):
+        print(f"\nIn Insert {point}\n")
+        self.setWeight(n, point[0])  # point[0] einai to key/timestamp
+        self.cf1x = self.cf1x + point[1]
+        self.cf2x = self.cf2x + point[1] * point[1]
+        print("type(cf2x,cf1x) after insert: ", type(self.cf2x), type(self.cf1x))
+        # self.setCf1x([a + p for a, p in zip(self.cf1x, point[1])])
+        # self.setCf2x([a + p * p for a, p in zip(self.cf2x, point[1])])
 
     # this is used during initDBSCAN
-    def insert(self, point, time, n):
+    def insertAtT(self, point, time, n):
         """
         Incremental insert of point into CoreMicroCluster (Property 3.1 Cao et al.)
 
