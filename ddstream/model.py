@@ -493,6 +493,11 @@ class DDStreamModel:
             for ss in dataInPmicSS:
                 i, ts = ss[0], ss[1][3]
                 print(f"i = {i}, time = {ts}")
+                # the max(ts) out of the microclusters becomes the self.lastEdit
+                if self.lastEdit < ts:
+                    self.lastEdit = ts
+                #TODO: See if we can do this with .insert()
+                self.pMicroCluster[i].setWeight(ss[1][2], ts)
 
         
 
