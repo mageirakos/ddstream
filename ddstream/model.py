@@ -495,7 +495,7 @@ class DDStreamModel:
         
 
         #TODO: TEST
-        removed = []
+        remove = []
         if len(dataInOmicSS) > 0:
             print(f"Number of updated o-micro-clusters = {len(dataInOmicSS)}")
             # detectList = []
@@ -509,9 +509,9 @@ class DDStreamModel:
                 self.oMicroClusters[i].cf1x = self.oMicroClusters[i].cf1x + delta_cf1x
                 self.oMicroClusters[i].cf2x = self.oMicroClusters[i].cf2x + delta_cf2x
                 if self.oMicroClusters[i].getWeight() >= self.beta * self.mu:
-                    removed.append(i)
+                    remove.append(i)
 
-        #TODO: Den ta xeirizomai swsta auta.
+        #TODO: TEST CODE
         if len(realOutliers) > 0:
             print(f"Number of realOutliers =  {len(realOutliers)}")
             #TODO: Is this needed?
@@ -521,9 +521,50 @@ class DDStreamModel:
                 realOutliers = sorted(realOutliers, key = lambda x : x[0])
             if self.lastEdit < realOutliers[len(realOutliers)-1][0]:
                 self.lastEdit = realOutliers[len(realOutliers)-1][0]
-            j = 0, 
+            j, newMCs = 0, []
+            for point in realOutliers:
+                minDist, idMinDist, merged = float("inf"), 0, 0
+                #TODO: What is this -> redundant?
+                if self.recursiveOutliersRMSDCheck == 1:
+                    if len(newMCs) > 0:
+                        for i in newMCs:
+                            dist = np.linalg.norm(self.oMicroClusters[i].getCentroid() - point[1])
+                            if dist < minDist:
+                                minDist, idMinDist = dist, i
+                    ocopy = copy.deepcopy(self.oMicroClusters[idMinDist])
+                    # insertAtt -> point, time, n
+                    #TODO: It is possible there is a mistake here in order...
+                    #       - I think they want n=1 and time=point[0] not reverse...
+                    ocopy.insertAtT(point[1], 1, point[0])
+                    if ocopy.getRMSD() <= self.epsilon:
+                        self.oMicroClusters[i].insert(point, 1.0)
+                        merged = 1
+                        j += 1
+                if merged == 0:
+                    newOmic = CoreMicroCluster(
 
+                    )
+                    self.oMicroClusters.append(newOmic)
+                    newMCs.append(len(self.oMicroClusters)-1) # keeps track of ids
+            print(f"The number of newly generated microclusters: {len(newMCs)}")
+            print(f"Merged outliers: {j}")
+            if self.recursiveOutliersRMSDCheck == 1:
+                for k in newMCs:
+                    w = self.oMicroClusters[k].getWeight()
+                    if w >= self.beta * self.mu:
+                        remove.append(k)
 
+        # remove..
+        if len(remove) > 0:
+            remove = remove[::-1] #TODO: Why
+            for r in remove:
+                self.pMicroCluster += self.oMicroClusters[r]
+                self.oMicroClusters -= self.oMicroClusters[r]
+
+        DriverTime = time.time() - DriverTime
+        self.AlldriverTime += DriverTime
+        print(f" Driver completed... driver time taken (ms) = {DriverTime}")
+        
 
 
 
