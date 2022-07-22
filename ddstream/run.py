@@ -216,6 +216,7 @@ def parse_args():
 def split_data(streaming_df, database="nsl-kdd"):
     # print("STEP 0: In split_data")
     """Change the input stream to be (label, Vector<features>)"""
+    #TODO: This can be take from numDimensions
     if database == "nsl-kdd":
         num_feats = 33
     elif database == "test":
@@ -350,7 +351,7 @@ if __name__ == "__main__":
     # print(f"START broadcast: {broadcasted_var} {broadcasted_var.value}")
     # model = DDStreamModel(broadcasted_var=broadcasted_var)
 
-    model = DDStreamModel()
+    model = DDStreamModel(NUM_DIMENSIONS)
 
     # Step 1. Initialize Micro Clusters
     # TODO: Decide what to do with the initDBSCAN

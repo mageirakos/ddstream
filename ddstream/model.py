@@ -8,19 +8,20 @@ import numpy as np
 class DDStreamModel:
     def __init__(
         self,
+        numDimensions,
         # broadcasted_var,
         # TODO: original: epsilon=16.0,
         #TODO: change self.epsilon to smaller as most distances <1.0 (not even 16) -> because we standardized
         epsilon=0.2,
         # TODO: set minPoints = 10.0
-        minPoints=5.0,
+        minPoints=10.0,
         beta=0.2,
         mu=10.0,
         lmbda=0.25,
         Tp=2,
     ):
         # self.broadcasted_var = broadcasted_var
-
+        self.numDimensions = numDimensions
         # TODO: check correct initialization etc.
         self.eps = 0.01
 
@@ -90,6 +91,8 @@ class DDStreamModel:
                 )
         # print(f"Final initArr {self.initArr}")
         num_of_datapts, num_of_dimensions = i + 1, len(tmp) - 1
+        # init dims must be same as training data stream dims
+        assert num_of_dimensions == self.numDimensions
         self.initArr = self.initArr.reshape((-1, num_of_dimensions))
 
         print(f"Number of dimensions: {num_of_dimensions}")
@@ -128,10 +131,16 @@ class DDStreamModel:
         self.broadcastPMic = ssc.sparkContext.broadcast(
             list(zip(self.pMicroClusters, range(len(self.pMicroClusters))))
         )
+        #TODO: Fix initDBSCAN to create outlier clusters
+        # self.broadcastOMic = ssc.sparkContext.broadcast(
+        #     list(zip(self.oMicroClusters, range(len(self.oMicroClusters))))
+        # )
         print(
             f"broadcastPMic (after) = {self.broadcastPMic} \n {self.broadcastPMic.value}"
         )
-
+        # print(
+        #     f"broadcastOMic (after) = {self.broadcastOMic} \n {self.broadcastOMic.value}"
+        # )
         # for mc in self.broadcastPMic.value:
         #     print(f"MC: {mc[0]}\n  weight: {mc[0].weight}")
 
@@ -316,14 +325,79 @@ class DDStreamModel:
 
         return rdd.map(lambda a: assign(a))
 
-    def assignToOutlierCluster(self):
-        pass
+    def assignToOutlierCluster(self, rdd):
+        """
+        For the points not assigned to a primary microcluster, assing them to an outlier microcluster.
+        :param rdd: RDD of outlier points (timestamp, <features>)
+        """
+        if not self.broadcastOMic:
+            return None
+        def assign(a):
+            # if we have no outlier microclusters
+            minIndex = -1
+            #TODO: We don't seem to have created any outlier micro clusters anywhere.
+            if len(self.broadcastOMic.value) > 0:
+                minDist = float("inf")
+                for mc in self.broadcastOMic.value:
+                    dist = np.linalg.norm(a[1] - mc[0].getCentroid())
+                    if dist < minDist:
+                        minDist, minIndex = dist, mc[1]
 
-    def computeDelta(self):
-        pass
+                ocopy = copy.deepcopy(self.broadcastOMic.value[minIndex][0])
+                ocopy.insert(a, 1)
+                if ocopy.getRMSD > self.epsilon:
+                    minIndex = -1
+                return minIndex, a
+        return rdd.map(lambda a: assign(a))
+
+    # TODO: Fix 
+    def computeDelta(self, sortedRDD):
+        """
+        Compute the Delta for Order-Aware Local Update Step.
+        The Delta represents the effect to each microcluster of adding the points in order to the mc they belong to.
+        
+        At the end of the function we collect all the Deltas from the worker to the driver node for the global update step
+        to be computed. The global update step actually applies the deltas/effects of insertion to the microcluters,
+        preparing them for the next batch.
+
+        :param sortedRDD: RDD grouped and sorted by microcluster id that contains list of numpy arrays with features of each point.
+                          Example: (0, [(1, array([ 0.60528983, -1.5069482 ])), (2, array([ 1.11312873, -1.06434713]))])
+                          Format (<microcluster_id>, list[ np.array(<features_point1>), ..., np.array(<features_pointN>) ])
+        :output : (microcluster_id, <(delta_cf1x, delta_cf2x, delta_n, delta_t)>)
+        """
+        print("In computeDelta")
+        # print(f"computeDelta input = {sortedRDD.collect()}")
+        # TODO: Do some python/spark magic for it to be in parallel
+        # basically a for loop to calculate deltas over entire rdd
+        #TODO: How do we aggregate the Deltas once we .collect them? Since a different Delta has been computed at each node.
+        def calcDelta(x):
+            """
+            :param x: list of points :(<timestamp>, list<feature values>)
+            :output (delta_cf1x, delta_cf2x, delta_n, delta_t)
+            """
+            #TODO: Give a proper definition of n. Basically n is used in weight where we +1 when we add a point
+            # but because here we add eg. 3 poitns do n = (l1*1)+(l2*1)+(l3*1) < 3 (lambda affect of each point)
+            delta_cf1x, delta_cf2x, delta_n, delta_t = np.zeros(self.numDimensions), np.zeros(self.numDimensions), 0.0, 0
+            # with open('blah.txt','a+') as f:
+            #         f.write(f"type = {type(x)}\t")
+            #         f.write(f"x = {x}\n")
+            # for each point in order apply decay and compute the delta "effect" to mc
+            for row in x:     
+                arrivalT, featVals = row[0], row[1]
+                assert type(featVals) == type(delta_cf1x) == type(delta_cf1x)
+                lmbda = math.pow(2, -self.lmbda * (arrivalT - delta_t))
+                delta_cf1x = (delta_cf1x * lmbda) + featVals
+                delta_cf2x = (delta_cf1x * lmbda) + featVals * featVals 
+                delta_n = (delta_n * lmbda) + 1
+                delta_t = max(arrivalT, delta_t)
+            return delta_cf1x, delta_cf2x, delta_n, delta_t
+        return sortedRDD.mapValues(lambda x: calcDelta(x)).collect()
+
+        
 
     # TODO: Understand and code up function.
     def updateMicroClusters(self, assignations):
+        ##### ---- Global Update Step
         print("In updateMicroClusters")
         # all are RDD[(Int, (<key>Long, Vector[<features(Double)>]))]:
         # dataInPmic = None
@@ -334,27 +408,95 @@ class DDStreamModel:
 
         # why persist: https://stackoverflow.com/questions/31002975/how-to-use-rdd-persist-and-cache
         assignations.persist()
-        to_be_printed = assignations.collect()
-        for row in to_be_printed:
-            print(f"assignations: {str(row)}")
+        print(f"assignations: {assignations.collect()}")
+        # # for printing:
+        # to_be_printed = assignations.collect()
+        # for row in to_be_printed:
+        #     print(f"assignations: {str(row)}")
 
-        print("Step 1")
+        # print("updateMicroClusters: Step 1")
         # Step 1: filter out the points that were not assigned to any microcluster
-        # dataInPmic = assignations.filter(lambda x: x[0] != -1)
+        dataInPmic = assignations.filter(lambda x: x[0] != -1)
+        print(f"dataInPmic: {dataInPmic.collect()}")
         # to_be_printed = dataInPmic.collect()
         # for row in to_be_printed:
         #     print(f"dataInPmic: {str(row)}")
+        # works ok until here
 
         # TODO: write aggregateFunction if needed:
         # aggregateFunction = lambda x: pass
 
         # Step 2: Sort the data assigned to Pmic based on arrival order
-        # TODO: fix this:
-        # print("Step 2")
-        # sortedRDD = dataInPmic.groupByKey()#.mapValues(lambda x: x.toList.sortBy(key=x[0]))
+        # print("updateMicroClusters: Step 2")
+        # if you want to see dataInPmic.groupByKey() before sorting: https://stackoverflow.com/questions/29717257/pyspark-groupbykey-returning-pyspark-resultiterable-resultiterable
+        # note: the data seems to be process in order by default but we follow the sorting logic. To test it use prints bellow
+        # sortedRDD = dataInPmic.groupByKey().map(lambda x : (x[0], list(x[1])))
+        # # to_be_printed here will be a ResultIterable so we need a double loop for contents
+        # to_be_printed = sortedRDD.collect()
+        # for row in to_be_printed:
+        #     print(f"pre_sortedRDD:  {str(row)}")
+        # x.toList.sortBy(key=x[0])
+        sortedRDD = dataInPmic.groupByKey().mapValues(lambda x: sorted(list(x), key=lambda y : y[0]))
         # to_be_printed = sortedRDD.collect()
         # for row in to_be_printed:
         #     print(f"sortedRDD:  {str(row)}")
+
+        # Step 3: 
+        dataInPmicSS = self.computeDelta(sortedRDD)
+        # print(f"dataInPmicSS: {dataInPmicSS}")
+        
+        # datapoints are data not assigned to pmic that might belong to outlier mc or are noise
+        dataInAndOut = assignations.filter(lambda x: x[0] == -1).map(lambda x: x[1])
+        print(f"dataInAndOut: {dataInAndOut.collect()}")
+        
+        #TODO: dataOut seems to not be needed --> same as 'outliers'
+        # dataOut: data not assigned to primary microclusters that have not been assigned to outlier microcluster
+        # or not assigned to any cluster -> index == -1
+        dataOut = self.assignToOutlierCluster(dataInAndOut)
+        # data in outlier microclusters
+        #TODO: Adjust code to handle:
+        if dataOut:
+            print(f"dataOut = {dataOut.collect()}")
+            dataOut.persist()
+            
+            dataInOmic = dataOut.filter(lambda x: x[0] != -1)
+            # outliers : data not assigned to outlier microclusters -> complete outliers
+            outliers = dataOut.filter(lambda x: x[0] == -1).map(lambda x: x[1])
+            # group by omc id and sort by arrivel and compute delta
+            omicSortedRDD = dataInOmic.groupByKey().mapValues(lambda x: sorted(list(x), key=lambda y : y[0]))
+            dataInOmicSS = self.computeDelta(omicSortedRDD)
+            
+            realOutliers = outliers.collect()
+
+        else:
+            dataInOmic, outliers, omicSortedRDD, dataInOmicSS  = None, None, None, None
+            realOutliers = None
+            
+            
+            
+        totalIn = 0 #TODO: Remove as it might be useless
+
+        # optimization not needed necessarily
+        if realOutliers and len(realOutliers) > 35_000:
+            realOutliers = realOutliers.sortByKey().collect()
+        
+        assignations.unpersist()
+        if dataOut: dataOut.unpersist()
+        #TODO: What is this
+        DriverTime = time.time()
+
+        ##### ---- Global Update Step
+        #TODO: Continue code
+        print("\t----Global Update Step:----")
+        print(f"dataInPmicSS= {dataInPmicSS}")
+        if len(dataInPmicSS) > 0:
+            for ss in dataInPmicSS:
+                i, ts = ss[0], ss[1][3]
+                print(f"i = {i}, time = {ts}")
+
+        
+
+
 
     def ModelDetect(self):
         pass
