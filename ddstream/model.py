@@ -10,7 +10,8 @@ class DDStreamModel:
         self,
         # broadcasted_var,
         # TODO: original: epsilon=16.0,
-        epsilon=16,
+        #TODO: change self.epsilon to smaller as most distances <1.0 (not even 16) -> because we standardized
+        epsilon=0.2,
         # TODO: set minPoints = 10.0
         minPoints=5.0,
         beta=0.2,
@@ -82,11 +83,12 @@ class DDStreamModel:
             lines, initLabels = f.readlines(), []
             for i, line in enumerate(lines):
                 tmp = line.split(",")
+                # print(f"adding {tmp} to initArr")
                 initLabels.append(int(tmp[-1]))  # assume label at end
                 self.initArr = np.append(
                     self.initArr, np.asarray(list(map(lambda x: float(x), tmp[:-1])))
                 )
-
+        # print(f"Final initArr {self.initArr}")
         num_of_datapts, num_of_dimensions = i + 1, len(tmp) - 1
         self.initArr = self.initArr.reshape((-1, num_of_dimensions))
 
@@ -106,6 +108,7 @@ class DDStreamModel:
                 self.tag[0] = 1
                 # new microcluster for a core data point ( since neighborhood > minpts)
                 # X num of dimensions -> len(cf2x) = len(cf1x) = X
+                
                 newMC = CoreMicroCluster(
                     cf2x=self.initArr[i] * self.initArr[i],  # element wise mult
                     cf1x=self.initArr[i],
@@ -115,6 +118,8 @@ class DDStreamModel:
                     lmbda=self.lmbda,
                     tfactor=self.tfactor,
                 )
+                # print(f"Point {self.initArr[i]} has neighborhood > minPts = {neighborHoodList}")
+                # print(f"Creating newMC {newMC} with cf1x = {newMC.cf1x}")
                 # expandCluster adds all neighborhood points to the newMC
                 self.expandCluster(newMC, neighborHoodList, initialEpsilon)
                 self.pMicroClusters.append(newMC)
@@ -126,6 +131,7 @@ class DDStreamModel:
         print(
             f"broadcastPMic (after) = {self.broadcastPMic} \n {self.broadcastPMic.value}"
         )
+
         # for mc in self.broadcastPMic.value:
         #     print(f"MC: {mc[0]}\n  weight: {mc[0].weight}")
 
@@ -135,6 +141,9 @@ class DDStreamModel:
         # )
 
         print(f"number of pMicroClusters = {len(self.pMicroClusters)}")
+        # print centroids
+        for mc in self.broadcastPMic.value:
+            print(f"mc =  {mc[1]} with centroid =  {mc[0].getCentroid()}")
         print(f"number of oMicroClusters = {len(self.oMicroClusters)}")
         not_in_mc = len(list(filter(lambda x: x == 0, self.tag)))
         print(f"Points not added to MicroClusters = {not_in_mc}")
@@ -205,6 +214,7 @@ class DDStreamModel:
             # print(f"neighbor = {neighbor}\nneighborHoodList = {neighborHoodList}")
             neighborHoodList2 = self.getNeighborHood(neighbor, initialEpsilon)
             if len(neighborHoodList2) > self.minPoints:
+                print(f"in expandCluster for {newMC} with neighborhood2 {neighborHoodList2}")
                 self.expandCluster(newMC, neighborHoodList2, initialEpsilon)
 
     # TODO: Make sure that createing multiple rdd.contect.broadcast() objects is not a problem
@@ -247,7 +257,7 @@ class DDStreamModel:
         """
         print("In assignToMicroCluster")
         # STEP 1: For each element in the RDD
-        # print(f"broadcastPMIC: {self.broadcastPMic} {self.broadcastPMic.value} {len(self.broadcastPMic.value)}")
+        # print(f"broadcastPMic: {self.broadcastPMic} {self.broadcastPMic.value} {len(self.broadcastPMic.value)}")
         # print(f"{self.broadcastPMic.value[-1][0]}")
         # TODO: Why print not work in assign() -> because in map??
         def assign(a):
@@ -278,9 +288,9 @@ class DDStreamModel:
 
                 # TODO: Understand this
                 # Step 4: Create a copy of the closest p microcluster to the point and insert it into it
-                # pcopy = copy.deepcopy(self.broadcastPMic.value[minIndex][0])
+                pcopy = copy.deepcopy(self.broadcastPMic.value[minIndex][0])
 
-                pcopy = self.broadcastPMic.value[minIndex][0].copy()
+                # pcopy = self.broadcastPMic.value[minIndex][0].copy()
                 n = 0
                 # with open('blah.txt','a') as f:
                 #     n += 1
@@ -299,10 +309,11 @@ class DDStreamModel:
                 # Step 5: If the radius of this microcluster is larger than the epsilon then reset the minIndex (i.e the point is not inserted)
                 # - we still need to insert the point to the microcluster in the future
                 # - this only returns a tuple of (index_of_closest_mc, point) === (minIndex, a)
+                #TODO: change self.epsilon to smaller as most distances <1.0 (not even 16) -> because we standardized
                 if pcopy.getRMSD() > self.epsilon:
                     print("TRUE: pcopy.getRMSD() > self.epsilon")
                     minIndex = -1
-            return minIndex, a, minDist, pcopy.getRMSD(), self.epsilon, tmp
+            return minIndex, a, pcopy.getRMSD(), self.epsilon
 
         return rdd.map(lambda a: assign(a))
 
@@ -330,10 +341,10 @@ class DDStreamModel:
 
         print("Step 1")
         # Step 1: filter out the points that were not assigned to any microcluster
-        dataInPmic = assignations.filter(lambda x: x[0] != -1)
-        to_be_printed = dataInPmic.collect()
-        for row in to_be_printed:
-            print(f"dataInPmic: {str(row)}")
+        # dataInPmic = assignations.filter(lambda x: x[0] != -1)
+        # to_be_printed = dataInPmic.collect()
+        # for row in to_be_printed:
+        #     print(f"dataInPmic: {str(row)}")
 
         # TODO: write aggregateFunction if needed:
         # aggregateFunction = lambda x: pass

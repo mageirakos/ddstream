@@ -56,8 +56,11 @@ class CoreMicroCluster:
 
         :param dt = time passed since lastEdit ( t - lastEdit; where t is current time )
         """
+        # print(f"in calcCf1x for {self}")
         delta = math.pow(2, -self.lmbda * dt)
+        # print(f"cf1x BEFORE {self.cf1x} delta = {delta}")
         self.cf1x = self.cf1x * delta
+        # print(f"cf1x AFTER : {self.cf1x}")
 
     # - self.lastEdit is the last time we took a step (calculated weight,cf1x,cf2x etc.)
     def setWeight(self, n, t):
@@ -92,12 +95,16 @@ class CoreMicroCluster:
     def getWeight(self):
         return self.weight
 
+    # TODO: Fix this returns centroid that are way off
     def getCentroid(self):
         """Get center of CoreMicroCluster (Definition 3.3 - Cao et al.)"""
+        # print(f"in getCentroid for {self}")
         # TODO: Understand relationship between weight and number of points in microcluster or total_num_pmcs
         if self.weight > 0:
+            # print(f'self.weight > 0;\t self.cf1x / self.weight = {self.cf1x}/{self.weight}')
             return self.cf1x / self.weight
         else:
+            # print(f'self.weight < 0;\t self.cf1x = {self.cf1x}')
             return self.cf1x
 
     # TODO: What is tfactor

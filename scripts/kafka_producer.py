@@ -15,7 +15,6 @@ def generate_stream():
     """Send stream of data to Kafka topic based on rate."""
     global reader, total_processed
     part = 0
-    key = 0  # TODO: Might need to change this to create artificial ordering
     total_current_interval = 0
     while total_current_interval < rate:
         try:
@@ -23,8 +22,8 @@ def generate_stream():
         except StopIteration:
             reader = file_reader(dataset)
             stream = next(reader)
-
-        producer.send(topic, bytes(stream, encoding="utf8"))
+        
+        producer.send(topic, value=bytes(stream, encoding="utf8"), key=bytes(str(total_processed), encoding="utf8"))
         print(f"Sending '{dataset.split('/')[-1]}' to topic '{topic}', #{total_processed}")
 
         total_current_interval += 1
