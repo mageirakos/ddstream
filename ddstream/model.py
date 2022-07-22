@@ -311,9 +311,8 @@ class DDStreamModel:
                 # - this only returns a tuple of (index_of_closest_mc, point) === (minIndex, a)
                 #TODO: change self.epsilon to smaller as most distances <1.0 (not even 16) -> because we standardized
                 if pcopy.getRMSD() > self.epsilon:
-                    print("TRUE: pcopy.getRMSD() > self.epsilon")
                     minIndex = -1
-            return minIndex, a, pcopy.getRMSD(), self.epsilon
+            return minIndex, a#, pcopy.getRMSD(), self.epsilon
 
         return rdd.map(lambda a: assign(a))
 
