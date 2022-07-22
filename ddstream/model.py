@@ -132,9 +132,9 @@ class DDStreamModel:
             list(zip(self.pMicroClusters, range(len(self.pMicroClusters))))
         )
         #TODO: Fix initDBSCAN to create outlier clusters
-        # self.broadcastOMic = ssc.sparkContext.broadcast(
-        #     list(zip(self.oMicroClusters, range(len(self.oMicroClusters))))
-        # )
+        self.broadcastOMic = ssc.sparkContext.broadcast(
+            list(zip(self.oMicroClusters, range(len(self.oMicroClusters))))
+        )
         print(
             f"broadcastPMic (after) = {self.broadcastPMic} \n {self.broadcastPMic.value}"
         )
@@ -321,6 +321,8 @@ class DDStreamModel:
                 #TODO: change self.epsilon to smaller as most distances <1.0 (not even 16) -> because we standardized
                 if pcopy.getRMSD() > self.epsilon:
                     minIndex = -1
+            else:
+                minIndex = -1
             return minIndex, a#, pcopy.getRMSD(), self.epsilon
 
         return rdd.map(lambda a: assign(a))
@@ -330,8 +332,6 @@ class DDStreamModel:
         For the points not assigned to a primary microcluster, assing them to an outlier microcluster.
         :param rdd: RDD of outlier points (timestamp, <features>)
         """
-        if not self.broadcastOMic:
-            return None
         def assign(a):
             # if we have no outlier microclusters
             minIndex = -1
@@ -347,7 +347,9 @@ class DDStreamModel:
                 ocopy.insert(a, 1)
                 if ocopy.getRMSD > self.epsilon:
                     minIndex = -1
-                return minIndex, a
+            else:
+                minIndex = -1
+            return minIndex, a
         return rdd.map(lambda a: assign(a))
 
     # TODO: Fix 
@@ -455,33 +457,21 @@ class DDStreamModel:
         dataOut = self.assignToOutlierCluster(dataInAndOut)
         # data in outlier microclusters
         #TODO: Adjust code to handle:
-        if dataOut:
-            print(f"dataOut = {dataOut.collect()}")
-            dataOut.persist()
+        print(f"dataOut = {dataOut.collect()}")
+        dataOut.persist()
             
-            dataInOmic = dataOut.filter(lambda x: x[0] != -1)
-            # outliers : data not assigned to outlier microclusters -> complete outliers
-            outliers = dataOut.filter(lambda x: x[0] == -1).map(lambda x: x[1])
-            # group by omc id and sort by arrivel and compute delta
-            omicSortedRDD = dataInOmic.groupByKey().mapValues(lambda x: sorted(list(x), key=lambda y : y[0]))
-            dataInOmicSS = self.computeDelta(omicSortedRDD)
-            
-            realOutliers = outliers.collect()
-
-        else:
-            dataInOmic, outliers, omicSortedRDD, dataInOmicSS  = None, None, None, None
-            realOutliers = None
-            
-            
+        dataInOmic = dataOut.filter(lambda x: x[0] != -1)
+        # outliers : data not assigned to outlier microclusters -> complete outliers
+        outliers = dataOut.filter(lambda x: x[0] == -1).map(lambda x: x[1])
+        # group by omc id and sort by arrivel and compute delta
+        omicSortedRDD = dataInOmic.groupByKey().mapValues(lambda x: sorted(list(x), key=lambda y : y[0]))
+        dataInOmicSS = self.computeDelta(omicSortedRDD)
             
         totalIn = 0 #TODO: Remove as it might be useless
-
-        # optimization not needed necessarily
-        if realOutliers and len(realOutliers) > 35_000:
-            realOutliers = realOutliers.sortByKey().collect()
+        realOutliers = outliers.collect()
         
         assignations.unpersist()
-        if dataOut: dataOut.unpersist()
+        dataOut.unpersist()
         #TODO: What is this
         DriverTime = time.time()
 
@@ -491,15 +481,49 @@ class DDStreamModel:
         print(f"dataInPmicSS= {dataInPmicSS}")
         if len(dataInPmicSS) > 0:
             for ss in dataInPmicSS:
-                i, ts = ss[0], ss[1][3]
-                print(f"i = {i}, time = {ts}")
+                i, delta_cf1x, delta_cf2x, n, ts = ss[0], ss[1][0], ss[1][1], ss[1][2], ss[1][3]
+                # print(f"i = {i}, time = {ts}")
                 # the max(ts) out of the microclusters becomes the self.lastEdit
                 if self.lastEdit < ts:
                     self.lastEdit = ts
                 #TODO: See if we can do this with .insert()
-                self.pMicroCluster[i].setWeight(ss[1][2], ts)
-
+                #TODO: Should we be manipulating the broadcastedObjects? or are we in driver node
+                #       so we can manipulate pMicroClusters?
+                self.pMicroClusters[i].setWeight(ss[1][2], ts)
+                self.pMicroClusters[i].cf1x = self.pMicroClusters[i].cf1x + delta_cf1x
+                self.pMicroClusters[i].cf2x = self.pMicroClusters[i].cf2x + delta_cf2x
         
+
+        #TODO: TEST
+        removed = []
+        if len(dataInOmicSS) > 0:
+            print(f"Number of updated o-micro-clusters = {len(dataInOmicSS)}")
+            # detectList = []
+            for oo in dataInOmicSS:
+                i, delta_cf1x, delta_cf2x, n, ts = oo[0], oo[1][0], oo[1][1], oo[1][2], oo[1][3]
+                # detectList.insert(0, i)
+                if self.lastEdit < ts:
+                    self.lastEdit = ts
+                #TODO: See if we can do this with .insert()
+                self.oMicroClusters[i].setWeight(ss[1][2], ts)
+                self.oMicroClusters[i].cf1x = self.oMicroClusters[i].cf1x + delta_cf1x
+                self.oMicroClusters[i].cf2x = self.oMicroClusters[i].cf2x + delta_cf2x
+                if self.oMicroClusters[i].getWeight() >= self.beta * self.mu:
+                    removed.append(i)
+
+        #TODO: Den ta xeirizomai swsta auta.
+        if len(realOutliers) > 0:
+            print(f"Number of realOutliers =  {len(realOutliers)}")
+            #TODO: Is this needed?
+            # if len(realOutliers) > 35_000:
+            #     realOutliers = realOutliers.sortByKey().collect()
+            if len(realOutliers) < 50_000:
+                realOutliers = sorted(realOutliers, key = lambda x : x[0])
+            if self.lastEdit < realOutliers[len(realOutliers)-1][0]:
+                self.lastEdit = realOutliers[len(realOutliers)-1][0]
+            j = 0, 
+
+
 
 
 

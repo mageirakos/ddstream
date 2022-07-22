@@ -146,7 +146,8 @@ class CoreMicroCluster:
     # point: (timestamp, list[float])
     def insert(self, point, n):
         print(f"\nIn Insert {point}\n")
-        self.setWeight(n, point[0])  # point[0] einai to key/timestamp
+        ts = point[0] #timestamp
+        self.setWeight(n, ts)
         self.cf1x = self.cf1x + point[1]
         self.cf2x = self.cf2x + point[1] * point[1]
         print("type(cf2x,cf1x) after insert: ", type(self.cf2x), type(self.cf1x))
