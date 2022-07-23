@@ -26,9 +26,9 @@ class CoreMicroCluster:
         :param cf1x     = weighted linear sum of the points (numpy.ndarray of length dimensions)
         :param cf2x     = weighted squared sum of the points (numpy.ndarray of length dimensions)
         :param weight   = param to determine threshold of outlier relative to c-micro cluster (w > beta*mu)
-        :param t0       =
+        :param t0       = timestamp of CoreMicroCluster creation
         :param lastEdit = last time an edit (weight, cf1, cf2 recalculation) happened
-        :param lmbda    =
+        :param lmbda    = 
         :param tfactor  =
         """
         self.cf2x = cf2x
@@ -85,7 +85,7 @@ class CoreMicroCluster:
     def setWeightWithoutDecaying(self, n):
         self.weight += n
 
-    def getWeight(self, t):
+    def getWeightAtT(self, t):
         if self.lastEdit == t:
             return self.weight
         else:
@@ -145,12 +145,12 @@ class CoreMicroCluster:
     # point: ((None, DenseVector(<features>)),1) ?
     # point: (timestamp, list[float])
     def insert(self, point, n):
-        print(f"\nIn Insert {point}\n")
-        ts = point[0] #timestamp
+        # print(f"\nIn Insert {point}\n")
+        ts, point_vals = point[0], point[1]
         self.setWeight(n, ts)
-        self.cf1x = self.cf1x + point[1]
-        self.cf2x = self.cf2x + point[1] * point[1]
-        print("type(cf2x,cf1x) after insert: ", type(self.cf2x), type(self.cf1x))
+        self.cf1x = self.cf1x + point_vals
+        self.cf2x = self.cf2x + point_vals * point_vals
+        # print("type(cf2x,cf1x) after insert: ", type(self.cf2x), type(self.cf1x))
         # self.setCf1x([a + p for a, p in zip(self.cf1x, point[1])])
         # self.setCf2x([a + p * p for a, p in zip(self.cf2x, point[1])])
 

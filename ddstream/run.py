@@ -351,7 +351,7 @@ if __name__ == "__main__":
     # print(f"START broadcast: {broadcasted_var} {broadcasted_var.value}")
     # model = DDStreamModel(broadcasted_var=broadcasted_var)
 
-    model = DDStreamModel(NUM_DIMENSIONS)
+    model = DDStreamModel(NUM_DIMENSIONS, BATCH_TIME)
 
     # Step 1. Initialize Micro Clusters
     # TODO: Decide what to do with the initDBSCAN
@@ -363,6 +363,7 @@ if __name__ == "__main__":
     # Step 2. Start Training Stream
     print("\nSTART TRAINING\n")
     training_data_stream = (
+        #TODO: I think processingTime === self.batchTime -> change it + add it to model
         training_data.writeStream.trigger(processingTime="5 seconds")
         .outputMode("update")
         .option("truncate", "false")

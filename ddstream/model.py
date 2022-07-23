@@ -1,14 +1,17 @@
+
 from microcluster import CoreMicroCluster
 
 # general
 import time, math, copy
 import numpy as np
 
+#TODO: Check that weight etc. is calculated/decaied based on cluster t0 ( which is when cluster was created etc. )
 
 class DDStreamModel:
     def __init__(
         self,
         numDimensions,
+        batchTime = 5, #TODO: See where this is used and use it ()
         # broadcasted_var,
         # TODO: original: epsilon=16.0,
         #TODO: change self.epsilon to smaller as most distances <1.0 (not even 16) -> because we standardized
@@ -22,6 +25,7 @@ class DDStreamModel:
     ):
         # self.broadcasted_var = broadcasted_var
         self.numDimensions = numDimensions
+        self.batchTime = batchTime
         # TODO: check correct initialization etc.
         self.eps = 0.01
 
@@ -116,8 +120,8 @@ class DDStreamModel:
                     cf2x=self.initArr[i] * self.initArr[i],  # element wise mult
                     cf1x=self.initArr[i],
                     weight=1.0,
-                    t0=0,
-                    lastEdit=0,
+                    t0=0, # timestamp of CoreMicroCluster creation
+                    lastEdit=0, # when initializing same as timestamp of CoreMicroCluster creation
                     lmbda=self.lmbda,
                     tfactor=self.tfactor,
                 )
@@ -136,7 +140,7 @@ class DDStreamModel:
             list(zip(self.oMicroClusters, range(len(self.oMicroClusters))))
         )
         print(
-            f"broadcastPMic (after) = {self.broadcastPMic} \n {self.broadcastPMic.value}"
+            f"broadcastPMic (-1) = {self.broadcastPMic} \n {self.broadcastPMic.value}"
         )
         # print(
         #     f"broadcastOMic (after) = {self.broadcastOMic} \n {self.broadcastOMic.value}"
@@ -233,7 +237,7 @@ class DDStreamModel:
 
     def run(self, streaming_df, batch_id):
         """Run .foreachBatch()"""
-        print(f"BATCH: {batch_id}", streaming_df, end="\n")
+        print(f"\nBATCH: {batch_id}", streaming_df, end="\n")
         # Step 0: Initializatino of Micro Clusters must have already been done
         # Step 1: Split to each rdd
         #: why the tuple? -> to get rid of Row(..) https://intellipaat.com/community/7578/how-to-convert-a-dataframe-back-to-normal-rdd-in-pyspark
@@ -245,7 +249,7 @@ class DDStreamModel:
 
         # Step 2: Make sure batch is not empty and p-mc have been initialized
         if not rdd.isEmpty() and self.initialized:
-            t0 = time.time()
+            batch_start_t = time.time()
             print(f"The time is now: {self.lastEdit}")
 
             # Step 3: Assign each point in the rdd to closest micro cluster (if radius<epsilon)
@@ -255,7 +259,37 @@ class DDStreamModel:
             # for row in to_be_printed:
             #     print(f"assignations : minIndex={str(row[0])} , a={str(row[1])}")
             # TODO: understand updateMicroClusters()
+
             self.updateMicroClusters(assignations)
+            #TODO: finish run()
+            self.broadcastPMic = rdd.context.broadcast(
+                list(zip(self.pMicroClusters, range(len(self.pMicroClusters))))
+            )
+            # print(f"broadcastPMic ({batch_id}) = {self.broadcastPMic} \n {self.broadcastPMic.value}")
+            self.broadcastOMic = rdd.context.broadcast(
+                list(zip(self.oMicroClusters, range(len(self.oMicroClusters))))
+            )
+            # print(f"broadcastOMic ({batch_id}) = {self.broadcastOMic} \n {self.broadcastOMic.value}")
+            print(f"After batch {batch_id} number of p microclusters: {len(self.broadcastPMic.value)}")
+            print(f"After batch {batch_id} number of o microclusters: {len(self.broadcastOMic.value)}")
+            
+
+            detectTime = time.time()
+            # every 4 batches apply remove decayied pmicroclusters
+            if self.modelDetectPeriod != 0 and self.modelDetectPeriod % 4 == 0:
+                print(f"Start Model Checking - Batch{batch_id}")
+                self.ModelDetect()
+                self.broadcastPMic = rdd.context.broadcast(list(zip(self.pMicroClusters, range(len(self.pMicroClusters)))))
+                self.broadcastOMic = rdd.context.broadcast(list(zip(self.oMicroClusters, range(len(self.oMicroClusters)))))
+
+            self.AllprocessTime += time.time() - batch_start_t
+            detectTime = time.time() - detectTime
+            self.AlldetectTime += detectTime
+            self.modelDetectPeriod += 1
+            print(f"Model checking completed... detect time taken (ms) = {detectTime}")
+
+
+
 
     def assignToMicroCluster(self, rdd):
         """
@@ -345,7 +379,7 @@ class DDStreamModel:
 
                 ocopy = copy.deepcopy(self.broadcastOMic.value[minIndex][0])
                 ocopy.insert(a, 1)
-                if ocopy.getRMSD > self.epsilon:
+                if ocopy.getRMSD() > self.epsilon:
                     minIndex = -1
             else:
                 minIndex = -1
@@ -399,6 +433,21 @@ class DDStreamModel:
 
     # TODO: Understand and code up function.
     def updateMicroClusters(self, assignations):
+        """
+        Algorithm 1 modified. (Cao et al. and Xu et al.)
+
+        Go over the current batch of points and :
+        1) Local Update Step: 
+            - Assign batch points to closest primary micro cluster
+            - Compute deltas (effect of each point with decay) to the respective primary micro cluster
+            - Assign rest of batch points to closest outlier micro cluster
+            - Compute deltas (effect of each point with decay) to the respective outlier micro cluster
+        2) Global Update Step:
+            - Apply aggregate delta effects to primary micro clusters
+            - Apply aggregate delta effects to outlier micro clusters
+            - Create new outlier micro clusters from points not assigned to any cluster (pmc or omc)
+            - Upgrade outlier micro clusters to primary micro clusters if .weight() > beta*mu
+        """
         ##### ---- Global Update Step
         print("In updateMicroClusters")
         # all are RDD[(Int, (<key>Long, Vector[<features(Double)>]))]:
@@ -479,6 +528,7 @@ class DDStreamModel:
         #TODO: Continue code
         print("\t----Global Update Step:----")
         print(f"dataInPmicSS= {dataInPmicSS}")
+        #TODO: Test exactly how deltas are applied, need to better understand effect.
         if len(dataInPmicSS) > 0:
             for ss in dataInPmicSS:
                 i, delta_cf1x, delta_cf2x, n, ts = ss[0], ss[1][0], ss[1][1], ss[1][2], ss[1][3]
@@ -489,13 +539,13 @@ class DDStreamModel:
                 #TODO: See if we can do this with .insert()
                 #TODO: Should we be manipulating the broadcastedObjects? or are we in driver node
                 #       so we can manipulate pMicroClusters?
-                self.pMicroClusters[i].setWeight(ss[1][2], ts)
+                self.pMicroClusters[i].setWeight(n, ts)
                 self.pMicroClusters[i].cf1x = self.pMicroClusters[i].cf1x + delta_cf1x
                 self.pMicroClusters[i].cf2x = self.pMicroClusters[i].cf2x + delta_cf2x
         
 
         #TODO: TEST
-        remove = []
+        upgradeToPMIC = []
         if len(dataInOmicSS) > 0:
             print(f"Number of updated o-micro-clusters = {len(dataInOmicSS)}")
             # detectList = []
@@ -505,15 +555,19 @@ class DDStreamModel:
                 if self.lastEdit < ts:
                     self.lastEdit = ts
                 #TODO: See if we can do this with .insert()
-                self.oMicroClusters[i].setWeight(ss[1][2], ts)
+                self.oMicroClusters[i].setWeight(n, ts)
                 self.oMicroClusters[i].cf1x = self.oMicroClusters[i].cf1x + delta_cf1x
                 self.oMicroClusters[i].cf2x = self.oMicroClusters[i].cf2x + delta_cf2x
                 if self.oMicroClusters[i].getWeight() >= self.beta * self.mu:
-                    remove.append(i)
+                    print(f"upgradeToPMIC = {upgradeToPMIC}")
+                    upgradeToPMIC.append(i)
 
         #TODO: TEST CODE
+        # tyoe(realOutliers) == list() 
         if len(realOutliers) > 0:
             print(f"Number of realOutliers =  {len(realOutliers)}")
+            print(f"realOutliers =  {realOutliers}")
+            
             #TODO: Is this needed?
             # if len(realOutliers) > 35_000:
             #     realOutliers = realOutliers.sortByKey().collect()
@@ -521,57 +575,109 @@ class DDStreamModel:
                 realOutliers = sorted(realOutliers, key = lambda x : x[0])
             if self.lastEdit < realOutliers[len(realOutliers)-1][0]:
                 self.lastEdit = realOutliers[len(realOutliers)-1][0]
+            # newMCs -> keep track of newly created micro clusters
             j, newMCs = 0, []
             for point in realOutliers:
+                ts, point_vals = point[0], point[1]
                 minDist, idMinDist, merged = float("inf"), 0, 0
                 #TODO: What is this -> redundant?
-                if self.recursiveOutliersRMSDCheck == 1:
+                #TODO: Check if we can create oMicroClusters in InitDBSCAn rather than at this point (maybe start out with some oMicroClusters....)
+                if len(self.oMicroClusters) > 0 and self.recursiveOutliersRMSDCheck == 1:
+                    # if we created a newMC on a previous point of the realOutliers (try to insert)
                     if len(newMCs) > 0:
                         for i in newMCs:
                             dist = np.linalg.norm(self.oMicroClusters[i].getCentroid() - point[1])
                             if dist < minDist:
                                 minDist, idMinDist = dist, i
+                    # print(f"(realOloop) oMicroClusters == {self.oMicroClusters}")
+                    # print(f"(realOloop) oMicroClusters[{idMinDist}] == {self.oMicroClusters[idMinDist]}")
                     ocopy = copy.deepcopy(self.oMicroClusters[idMinDist])
-                    # insertAtt -> point, time, n
-                    #TODO: It is possible there is a mistake here in order...
-                    #       - I think they want n=1 and time=point[0] not reverse...
-                    ocopy.insertAtT(point[1], 1, point[0])
+                    #TODO: Test correctness
+                    ocopy.insertAtT(point=point_vals, time=ts, n=1)
                     if ocopy.getRMSD() <= self.epsilon:
-                        self.oMicroClusters[i].insert(point, 1.0)
+                        self.oMicroClusters[idMinDist].insert(point, 1.0)
                         merged = 1
                         j += 1
+                # Creation of outlier micro clusters
                 if merged == 0:
+                    #TODO: Fix
                     newOmic = CoreMicroCluster(
-
+                        cf2x = point_vals * point_vals,
+                        cf1x = point_vals,
+                        weight = 1.0,
+                        t0 = ts,
+                        lastEdit = ts,
+                        lmbda = self.lmbda,
+                        tfactor = self.tfactor,
                     )
                     self.oMicroClusters.append(newOmic)
-                    newMCs.append(len(self.oMicroClusters)-1) # keeps track of ids
+                    newMCs.append(len(self.oMicroClusters)-1)
             print(f"The number of newly generated microclusters: {len(newMCs)}")
             print(f"Merged outliers: {j}")
             if self.recursiveOutliersRMSDCheck == 1:
                 for k in newMCs:
                     w = self.oMicroClusters[k].getWeight()
                     if w >= self.beta * self.mu:
-                        remove.append(k)
+                        upgradeToPMIC.append(k)
+                        print(f"upgradeToPMIC = {upgradeToPMIC}")
 
-        # remove..
-        if len(remove) > 0:
-            remove = remove[::-1] #TODO: Why
-            for r in remove:
-                self.pMicroCluster += self.oMicroClusters[r]
-                self.oMicroClusters -= self.oMicroClusters[r]
+        # upgradeToPMIC..
+        if len(upgradeToPMIC) > 0:
+            # print(f"upgradeToPMIC = {upgradeToPMIC}")
+            # we need descending order delete because del changes index
+            for r in sorted(upgradeToPMIC, reverse=True):
+                # print(f"r= {r} - deleting self.oMicroClusters[{r}] = {self.oMicroClusters[r]} from {self.oMicroClusters}")
+                self.pMicroClusters.append(self.oMicroClusters[r])
+                # print(f"self.pMicroClusters = {self.pMicroClusters}")
+                del self.oMicroClusters[r]
+                # print(f"self.oMicroClusters = {self.oMicroClusters}")
+                # self.oMicroClusters -= self.oMicroClusters[r]
 
         DriverTime = time.time() - DriverTime
         self.AlldriverTime += DriverTime
         print(f" Driver completed... driver time taken (ms) = {DriverTime}")
-        
 
 
 
     def ModelDetect(self):
-        pass
+        """
+        Algorithm 2 -> if t%Tp DenStream (Cat et al.)
+        """
+        print(f"Time for model microcluster detection: {self.lastEdit}")
+        to_be_deleted = []
+        if len(self.pMicroClusters) > 0:
+            for idx, mc in enumerate(self.pMicroClusters):
+                if mc.getWeightAtT(self.lastEdit) < self.beta * self.mu:
+                    to_be_deleted.append(idx)
+        print(f"Number of P microclusters to be deleted: {len(to_be_deleted)}")
+        if len(to_be_deleted) > 0:
+            # we need descending order delete because del changes index
+            for i in sorted(to_be_deleted, reverse=True):
+                print(f"i = {i}, to_be_deleted = {to_be_deleted}")
+                print(f"pMicroClusters = {self.pMicroClusters}")
+                print(f"len(pmc) = {len(self.pMicroClusters)}")
+                del self.pMicroClusters[i]
+        
+        # Time for outlier microcluster deletion (slightly different)
+        to_be_deleted = []
+        if len(self.oMicroClusters) > 0:
+            for idx, mc in enumerate(self.oMicroClusters):
+                nomin = math.pow(2, -self.lmbda * (self.lastEdit - mc.t0 + self.Tp)) 
+                denom = math.pow(2, -self.lmbda * self.Tp) - 1
+                uthres =  nomin / denom
+                if mc.getWeightAtT(self.lastEdit) < uthres:
+                    to_be_deleted.append(idx)
+
+        print(f"Number of O microclusters to be deleted: {len(to_be_deleted)}")
+        if len(to_be_deleted) > 0:
+            # we need descending order delete because del changes index
+            for i in sorted(to_be_deleted, reverse=True):
+                del self.oMicroClusters[i]
+
 
     def FinalDetect(self):
-        pass
+        #TODO: What is this?
+        self.time = self.time - self.batchTime
+        self.ModelDetect()
 
     # TODO: add setters/getters anything I missed that might be used
