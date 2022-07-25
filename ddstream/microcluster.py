@@ -66,10 +66,13 @@ class CoreMicroCluster:
     def setWeight(self, n, t):
         """Definition 3.4/Property 3.1 - Cao et al."""
         dt = t - self.lastEdit  # time passed since lastEdit
+        # print(f"in setWeight(n={n}, t={t}\ndt=t-lastEdit={t}-{self.lastEdit}={dt}")
         self.lastEdit = t
         # TODO: what is n? Is it the number of points merged to the cluster during last dt? (I think yes)
         #                   or is n in (0,1) depending on notmerge/merge
         # temp = self.weight
+        # print(f"pmic {self}")
+        # print(f"\tweight = {self.weight}\n\tcf1x={self.cf1x} cf2x={self.cf2x} center = {self.getCentroid()}")
         self.weight = self.weight * math.pow(2, -self.lmbda * dt) + n
         # # print(f"NEW WEIGHT: {self.weight} MC: {self}\n")
         # with open('blah.txt','a') as f:
@@ -81,14 +84,18 @@ class CoreMicroCluster:
         #     f.write(f"weight after = {self.weight}\n")
         self.calcCf1x(dt)
         self.calcCf2x(dt)
+        # print(f"\t(new) weight = {self.weight}\n\tcf1x={self.cf1x} cf2x={self.cf2x} center = {self.getCentroid()}")
 
     def setWeightWithoutDecaying(self, n):
         self.weight += n
 
     def getWeightAtT(self, t):
+        # print(f"\n\nHERE in getWeightAtT({t})")
         if self.lastEdit == t:
+            # print(f"self.lastEdit ({self.lastEdit}) == t ({t}) -> w {self.weight}")
             return self.weight
         else:
+            # print(f"self.lastEdit ({self.lastEdit}) != t ({t}) -> ")
             self.setWeight(0, t)
             return self.weight
 
@@ -151,6 +158,7 @@ class CoreMicroCluster:
         self.cf2x += point * point
 
     # TODO : Is this correct merging? Should weight be recalculated? Why max(lastEdit)?
+    # TODO : Not using this anywhere...
     def mergeWithOtherMC(self, otherMC):
         return CoreMicroCluster(
             self.cf2x + otherMC.cf2x,

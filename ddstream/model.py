@@ -13,13 +13,13 @@ class DDStreamModel:
         numDimensions,
         batchTime = 5, #TODO: See where this is used and use it ()
         #TODO: change self.epsilon to smaller as most distances <1.0 (not even 16 (original)) -> because we standardized
-        epsilon=0.2,
+        epsilon=0.5,
         # TODO: set minPoints = 10.0
-        minPoints=10.0,
+        # minPoints=10.0,
         beta=0.2,
-        mu=10.0,
-        lmbda=0.25,
-        Tp=2,
+        mu=3.0,
+        lmbda=0.2,
+        Tp=4,
     ):
         self.numDimensions = numDimensions
         self.batchTime = batchTime
@@ -45,7 +45,7 @@ class DDStreamModel:
         self.tag = []
 
         self.epsilon = epsilon
-        self.minPoints = minPoints
+        # self.minPoints = minPoints
         self.beta = beta
         self.mu = mu
         self.Tp = Tp
@@ -68,9 +68,13 @@ class DDStreamModel:
         # this.Tp = Math.round(1 / this.lambda * Math.log((this.beta * this.mu) / (this.beta * this.mu - 1))) + 1
         pass
 
+    def getMicroClusters(self):
+        return self.pMicroClusters
+
+
     # TODO: Test (test with initLabels and calculations)
     def initDBSCAN(
-        self, ssc, initialEpsilon: float, path="./data/init_toy_dataset.csv"
+        self, ssc, initialEpsilon = 0.5, path="./data/init_toy_dataset.csv"
     ):
         """
         Initialize DBSCAN microcluster.
@@ -86,13 +90,18 @@ class DDStreamModel:
             for i, line in enumerate(lines):
                 tmp = line.split(",")
                 # print(f"adding {tmp} to initArr")
-                initLabels.append(int(tmp[-1]))  # assume label at end
+                # assume label at end (either int or str/obj)
+                try:
+                    initLabels.append(int(tmp[-1]))
+                except:
+                    initLabels.append(str(tmp[-1]))
                 self.initArr = np.append(
                     self.initArr, np.asarray(list(map(lambda x: float(x), tmp[:-1])))
                 )
         # print(f"Final initArr {self.initArr}")
         num_of_datapts, num_of_dimensions = i + 1, len(tmp) - 1
         # init dims must be same as training data stream dims
+        # print(f"assert {num_of_dimensions} == {self.numDimensions}")
         assert num_of_dimensions == self.numDimensions
         self.initArr = self.initArr.reshape((-1, num_of_dimensions))
 
@@ -106,9 +115,9 @@ class DDStreamModel:
             # get neighborhood of this specific data point which has X dimensions
             neighborHoodList = self.getNeighborHood(i, initialEpsilon)
             # print(
-            #     f"\nCHECK 1 : len(neighborHoodList) > self.minPoints = {len(neighborHoodList)} > {self.minPoints}"
+            #     f"\n{i}) CHECK 1 : len(neighborHoodList) > self.mu = {len(neighborHoodList)} > {self.mu}"
             # )
-            if len(neighborHoodList) > self.minPoints:
+            if len(neighborHoodList) > self.mu:
                 self.tag[0] = 1
                 # new microcluster for a core data point ( since neighborhood > minpts)
                 # X num of dimensions -> len(cf2x) = len(cf1x) = X
@@ -160,7 +169,6 @@ class DDStreamModel:
         self.initialized = True
         print("END of Initialization\n")
 
-    # TODO: Test
     def getNeighborHood(self, pos: int, epsilon: float):
         """
         Get the indices of the points in the neighborhood of the point = self.initArr[pos]
@@ -190,7 +198,7 @@ class DDStreamModel:
                 # print(f"dist: np.linalg.norm(A) = {dist} < epsilon = {epsilon}", end="")
                 # print(f"\tAVG distance = {total_dist/pts}", end="")
                 if dist < epsilon:
-                    # print("->YES")
+                    # print("-> 2 YES")
                     # add the point to the neighborhood of the initArr[pos] point
                     # print(f"idBuffer = {idBuffer}")
                     idBuffer.append(i)
@@ -217,8 +225,8 @@ class DDStreamModel:
 
             # print(f"neighbor = {neighbor}\nneighborHoodList = {neighborHoodList}")
             neighborHoodList2 = self.getNeighborHood(neighbor, initialEpsilon)
-            if len(neighborHoodList2) > self.minPoints:
-                print(f"in expandCluster for {newMC} with neighborhood2 {neighborHoodList2}")
+            if len(neighborHoodList2) > self.mu:
+                # print(f"in expandCluster for {newMC} with neighborhood2 {neighborHoodList2}")
                 self.expandCluster(newMC, neighborHoodList2, initialEpsilon)
 
     # TODO: Make sure that createing multiple rdd.contect.broadcast() objects is not a problem
@@ -252,19 +260,22 @@ class DDStreamModel:
             self.broadcastPMic = rdd.context.broadcast(
                 list(zip(self.pMicroClusters, range(len(self.pMicroClusters))))
             )
-            # print(f"broadcastPMic ({batch_id}) = {self.broadcastPMic} \n {self.broadcastPMic.value}")
+            print(f"After batch {batch_id} number of p microclusters: {len(self.broadcastPMic.value)}")
+            # for mc in self.broadcastPMic.value:
+            #     print(f"pmic {mc[0]}\n\tlast_t={mc[0].lastEdit} w = {mc[0].weight} center = {mc[0].getCentroid()}")
             self.broadcastOMic = rdd.context.broadcast(
                 list(zip(self.oMicroClusters, range(len(self.oMicroClusters))))
             )
-            # print(f"broadcastOMic ({batch_id}) = {self.broadcastOMic} \n {self.broadcastOMic.value}")
-            print(f"After batch {batch_id} number of p microclusters: {len(self.broadcastPMic.value)}")
             print(f"After batch {batch_id} number of o microclusters: {len(self.broadcastOMic.value)}")
+            # for mc in self.broadcastOMic.value:
+            #     print(f"omic {mc[0]}\n\tlast_t={mc[0].lastEdit} w ={mc[0].weight} center = {mc[0].getCentroid()}")
+            # print(f"batch_{batch_id} OutlierMC ({batch_id}) = {self.oMicroClusters} \n {self.oMicroClusters.value}")
             
 
             detectTime = time.time()
-            # every 4 batches apply remove decayied pmicroclusters
+            # every 4 batches apply remove decayied pMicroClusters
             if self.modelDetectPeriod != 0 and self.modelDetectPeriod % 4 == 0:
-                print(f"Start Model Checking - Batch{batch_id}")
+                # print(f"Start Model Checking - Batch{batch_id}")
                 self.ModelDetect()
                 self.broadcastPMic = rdd.context.broadcast(list(zip(self.pMicroClusters, range(len(self.pMicroClusters)))))
                 self.broadcastOMic = rdd.context.broadcast(list(zip(self.oMicroClusters, range(len(self.oMicroClusters)))))
@@ -273,7 +284,7 @@ class DDStreamModel:
             detectTime = time.time() - detectTime
             self.AlldetectTime += detectTime
             self.modelDetectPeriod += 1
-            print(f"Model checking completed... detect time taken (ms) = {detectTime}")
+            # print(f"Model checking completed... detect time taken (ms) = {detectTime}")
 
 
 
@@ -285,7 +296,7 @@ class DDStreamModel:
         :return rdd      : (minIndex, (key, <features>))
         :return minIndex : index of closest microcluster ( -1 indicates no assignment)
         """
-        print("In assignToMicroCluster")
+        # print("In assignToMicroCluster")
         # STEP 1: For each element in the RDD
         # print(f"broadcastPMic: {self.broadcastPMic} {self.broadcastPMic.value} {len(self.broadcastPMic.value)}")
         # print(f"{self.broadcastPMic.value[-1][0]}")
@@ -367,7 +378,7 @@ class DDStreamModel:
                           Format (<microcluster_id>, list[ np.array(<features_point1>), ..., np.array(<features_pointN>) ])
         :output : (microcluster_id, <(delta_cf1x, delta_cf2x, delta_n, delta_t)>)
         """
-        print("In computeDelta")
+        # print("In computeDelta")
         # print(f"computeDelta input = {sortedRDD.collect()}")
         #TODO: How do we aggregate the Deltas once we .collect them? Since a different Delta has been computed at each node.
         def calcDelta(x):
@@ -412,7 +423,7 @@ class DDStreamModel:
             - Upgrade outlier micro clusters to primary micro clusters if .weight() > beta*mu
         """
         ##### ---- Global Update Step
-        print("In updateMicroClusters")
+        # print("In updateMicroClusters")
         # all are RDD[(Int, (<key>Long, Vector[<features(Double)>]))]:
         # dataInPmic = None
         # dataInAndOut = None
@@ -422,7 +433,11 @@ class DDStreamModel:
 
         # why persist: https://stackoverflow.com/questions/31002975/how-to-use-rdd-persist-and-cache
         assignations.persist()
-        print(f"assignations: {assignations.collect()}")
+        
+        # aa = assignations.collect()
+        # print(f"{len(aa)} assignations: {aa}")
+
+
         # # for printing:
         # to_be_printed = assignations.collect()
         # for row in to_be_printed:
@@ -431,7 +446,7 @@ class DDStreamModel:
         # print("updateMicroClusters: Step 1")
         # Step 1: filter out the points that were not assigned to any microcluster
         dataInPmic = assignations.filter(lambda x: x[0] != -1)
-        print(f"dataInPmic: {dataInPmic.collect()}")
+        # print(f"dataInPmic: {dataInPmic.collect()}")
         # to_be_printed = dataInPmic.collect()
         # for row in to_be_printed:
         #     print(f"dataInPmic: {str(row)}")
@@ -458,13 +473,13 @@ class DDStreamModel:
         
         # datapoints are data not assigned to pmic that might belong to outlier mc or are noise
         dataInAndOut = assignations.filter(lambda x: x[0] == -1).map(lambda x: x[1])
-        print(f"dataInAndOut: {dataInAndOut.collect()}")
+        # print(f"dataInAndOut: {dataInAndOut.collect()}")
         
         # dataOut: data not assigned to primary microclusters that have not been assigned to outlier microcluster
         # or not assigned to any cluster -> index == -1
         dataOut = self.assignToOutlierCluster(dataInAndOut)
         # data in outlier microclusters
-        print(f"dataOut = {dataOut.collect()}")
+        # print(f"dataOut = {dataOut.collect()}")
         dataOut.persist()
             
         dataInOmic = dataOut.filter(lambda x: x[0] != -1)
@@ -482,8 +497,8 @@ class DDStreamModel:
         DriverTime = time.time()
 
         ##### ---- Global Update Step
-        print("\t----Global Update Step:----")
-        print(f"dataInPmicSS= {dataInPmicSS}")
+        # print("\t----Global Update Step:----")
+        # print(f"dataInPmicSS= {dataInPmicSS}")
         #TODO: Test exactly how deltas are applied, need to better understand effect.
         if len(dataInPmicSS) > 0:
             for ss in dataInPmicSS:
@@ -503,7 +518,7 @@ class DDStreamModel:
         #TODO: TEST
         upgradeToPMIC = []
         if len(dataInOmicSS) > 0:
-            print(f"Number of updated o-micro-clusters = {len(dataInOmicSS)}")
+            # print(f"Number of updated o-micro-clusters = {len(dataInOmicSS)}")
             # detectList = []
             for oo in dataInOmicSS:
                 i, delta_cf1x, delta_cf2x, n, ts = oo[0], oo[1][0], oo[1][1], oo[1][2], oo[1][3]
@@ -514,15 +529,18 @@ class DDStreamModel:
                 self.oMicroClusters[i].setWeight(n, ts)
                 self.oMicroClusters[i].cf1x = self.oMicroClusters[i].cf1x + delta_cf1x
                 self.oMicroClusters[i].cf2x = self.oMicroClusters[i].cf2x + delta_cf2x
-                if self.oMicroClusters[i].weight >= self.beta * self.mu:
-                    print(f"upgradeToPMIC = {upgradeToPMIC}")
+                w = self.oMicroClusters[i].weight
+                # print("\nfor o-mc")
+                # print(f"self.beta * self.mu = {self.beta} * {self.mu} = {self.beta * self.mu}")
+                # print(f"w = {w}")
+                if w  >= self.beta * self.mu:
                     upgradeToPMIC.append(i)
 
         #TODO: TEST CODE
         # tyoe(realOutliers) == list() 
         if len(realOutliers) > 0:
-            print(f"Number of realOutliers =  {len(realOutliers)}")
-            print(f"realOutliers =  {realOutliers}")
+            # print(f"Number of realOutliers =  {len(realOutliers)}")
+            # print(f"realOutliers =  {realOutliers}")
             
             #TODO: Is this needed?
             # if len(realOutliers) > 35_000:
@@ -568,14 +586,17 @@ class DDStreamModel:
                     )
                     self.oMicroClusters.append(newOmic)
                     newMCs.append(len(self.oMicroClusters)-1)
-            print(f"The number of newly generated microclusters: {len(newMCs)}")
-            print(f"Merged outliers: {j}")
+            # print(f"The number of newly generated microclusters: {len(newMCs)}")
+            # print(f"Merged outliers: {j}")
             if self.recursiveOutliersRMSDCheck == 1:
                 for k in newMCs:
                     w = self.oMicroClusters[k].weight
+                    # print("\nfor o-mc new")
+                    # print(f"self.beta * self.mu = {self.beta} * {self.mu} = {self.beta * self.mu}")
+                    # print(f"w = {w}")
                     if w >= self.beta * self.mu:
                         upgradeToPMIC.append(k)
-                        print(f"upgradeToPMIC = {upgradeToPMIC}")
+                        # print(f"upgradeToPMIC = {upgradeToPMIC}")
 
         # upgradeToPMIC..
         if len(upgradeToPMIC) > 0:
@@ -583,6 +604,9 @@ class DDStreamModel:
             # we need descending order delete because del changes index
             for r in sorted(upgradeToPMIC, reverse=True):
                 # print(f"r= {r} - deleting self.oMicroClusters[{r}] = {self.oMicroClusters[r]} from {self.oMicroClusters}")
+                # print("\nupgrading..")
+                # print(f"upgradeToPMIC = {upgradeToPMIC}")
+
                 self.pMicroClusters.append(self.oMicroClusters[r])
                 # print(f"self.pMicroClusters = {self.pMicroClusters}")
                 del self.oMicroClusters[r]
@@ -591,7 +615,7 @@ class DDStreamModel:
 
         DriverTime = time.time() - DriverTime
         self.AlldriverTime += DriverTime
-        print(f" Driver completed... driver time taken (ms) = {DriverTime}")
+        # print(f" Driver completed... driver time taken (ms) = {DriverTime}")
 
 
 
@@ -599,19 +623,24 @@ class DDStreamModel:
         """
         Algorithm 2 -> if t%Tp DenStream (Cat et al.)
         """
-        print(f"Time for model microcluster detection: {self.lastEdit}")
+        # print(f"Time for model microcluster detection: {self.lastEdit}")
         to_be_deleted = []
         if len(self.pMicroClusters) > 0:
             for idx, mc in enumerate(self.pMicroClusters):
-                if mc.getWeightAtT(self.lastEdit) < self.beta * self.mu:
+                # print(f"\n for pmic {idx} to_be_deleted")
+                w = mc.getWeightAtT(self.lastEdit)
+                # print(f"self.beta * self.mu = {self.beta} * {self.mu} = {self.beta * self.mu}")
+                # print(f"w = {w}")
+                if w < self.beta * self.mu:
+                    # print(f"pmic {idx} will be deleted")
                     to_be_deleted.append(idx)
-        print(f"Number of P microclusters to be deleted: {len(to_be_deleted)}")
+        # print(f"Number of P microclusters to be deleted: {len(to_be_deleted)}")
         if len(to_be_deleted) > 0:
             # we need descending order delete because del changes index
             for i in sorted(to_be_deleted, reverse=True):
-                print(f"i = {i}, to_be_deleted = {to_be_deleted}")
-                print(f"pMicroClusters = {self.pMicroClusters}")
-                print(f"len(pmc) = {len(self.pMicroClusters)}")
+                # print(f"i = {i}, to_be_deleted = {to_be_deleted}")
+                # print(f"pMicroClusters = {self.pMicroClusters}")
+                # print(f"len(pmc) = {len(self.pMicroClusters)}")
                 del self.pMicroClusters[i]
         
         # Time for outlier microcluster deletion (slightly different)
@@ -624,7 +653,7 @@ class DDStreamModel:
                 if mc.getWeightAtT(self.lastEdit) < uthres:
                     to_be_deleted.append(idx)
 
-        print(f"Number of O microclusters to be deleted: {len(to_be_deleted)}")
+        # print(f"Number of O microclusters to be deleted: {len(to_be_deleted)}")
         if len(to_be_deleted) > 0:
             # we need descending order delete because del changes index
             for i in sorted(to_be_deleted, reverse=True):

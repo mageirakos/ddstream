@@ -1,5 +1,6 @@
 from settings import *
 from model import DDStreamModel
+from offline import DDStreamOfflineModel
 
 # general
 import argparse
@@ -71,6 +72,8 @@ def parse_args():
         type=float,
         help="Initial epsilon (default '0.02')",
     )
+    # A core object is defined as an object, in whose ≤ neighborhood the overall weight of data points is at least an integer μ.
+    # mu == minPoints
     optional.add_argument(
         "--mu",
         default="10.0",
@@ -97,9 +100,9 @@ def parse_args():
     )
     optional.add_argument(
         "--offlineEpsilon",
-        default="16.0",
+        default="0.2",
         type=float,
-        help="offline epsilon (default '16.0')",
+        help="offline epsilon (default '0.2')",
     )
     # TODO: What is this where is it used
     optional.add_argument(
@@ -142,8 +145,8 @@ def parse_args():
     optional.add_argument(
         "-d",
         "--dataset",
-        default="test",
-        help="Dataset input (default 'test')",
+        default="toy",
+        help="Dataset input (default 'toy')",
     )
     # trainingTopic
     optional.add_argument(
@@ -242,13 +245,25 @@ def split_data(streaming_df, database="nsl-kdd"):
     # np array # dense_features = udf(lambda arr: np.array(get_features(arr)))
     split_df = streaming_df.select(
         streaming_df["key"].cast("Long"),
-        split(streaming_df["value"], ",").alias("full_input_array"),
+        split(streaming_df["value"], "/").alias("ts-vals")
     )
+
+    # split_df = split_df.select(
+        # split(split_df["ts-vals"].getItem(1), ",").alias("full_input_array"),
+    # )
     # print(f"SPLIT_DF:{split_df}")
+    split_df = split_df.withColumn("time", split_df["ts-vals"].getItem(0)).withColumn(
+        "label_feats", split_df["ts-vals"].getItem(1))
+        
+    split_df = split_df.select(
+        split_df["key"].cast("Long"),
+        split_df["time"].cast("Long"),
+        split(split_df["label_feats"], ",").alias("full_input_array"),
+    )
     result = split_df.withColumn(
         "label", split_df["full_input_array"].getItem(num_feats)
     ).withColumn("features", dense_features(split_df["full_input_array"]))
-    # print("STEP 2: Leaving split_data")
+    print("STEP 2: Leaving split_data")
     return result
 
 
@@ -274,7 +289,7 @@ if __name__ == "__main__":
         TFACTOR,
         INITIAL_DATA_PATH,
         OFFLINE_EPSILON,
-        TRAINING_DATA_AMAOUNT,
+        TRAINING_DATA_AMOUNT,
         OS_TR,
         K,
         CM_DATA_PATH,
@@ -290,6 +305,8 @@ if __name__ == "__main__":
     # All local files need to be added like so:
     ssc.sparkContext.addPyFile("ddstream/model.py")
     ssc.sparkContext.addPyFile("ddstream/microcluster.py")
+    ssc.sparkContext.addPyFile("ddstream/offline.py")
+
 
     # Streaming Query
     # TODO: Maybe using StreamingListener is a must (I need it to print some results )
@@ -313,9 +330,10 @@ if __name__ == "__main__":
     # database options : [ 'test', 'nsl-kdd', 'toy', 'init_toy']
     data = split_data(input_df1, database=INPUT_DATA)
     # # For testing:
+    # training_data = data.select("time", "features")
     # random_stream = (
-    #     data.writeStream.trigger(processingTime="5 seconds")
-    #     .outputMode("update")
+    #     training_data.writeStream.trigger(processingTime="5 seconds")
+    #     .outputMode("append")
     #     .option("truncate", "false")
     #     .format("console")
     #     # .foreachBatch(model.run)
@@ -323,33 +341,33 @@ if __name__ == "__main__":
     # )
     # random_stream.awaitTermination(TIMEOUT)  # end of stream
     # random_stream.stop()
+    # exit()
 
     # We don't need the label on the training data
-    testing_data = data.select("key", "label", "features")
-    training_data = data.select("key", "features")
+    # testing_data = data.select("key", "label", "features")
 
-    # Default:
-    # test a broadcast variable
-    # broadcasted_var = ssc.sparkContext.broadcast(("a", "b", "c"))
-    # print(f"START broadcast: {broadcasted_var} {broadcasted_var.value}")
-    # model = DDStreamModel(broadcasted_var=broadcasted_var)
-
-    model = DDStreamModel(NUM_DIMENSIONS, BATCH_TIME)
+    model = DDStreamModel(numDimensions=NUM_DIMENSIONS, batchTime=BATCH_TIME)
+    model.epsilon = 0.4
+    model.mu = 10
+    model.lmbda = 0.25
 
     # Step 1. Initialize Micro Clusters
     initialDataPath = "./data/init_toy_dataset.csv"  # must be path in container file tree (shared volume)
-    # TODO: set initialEpsilon to 0.02 (after we standardise)
-    initialEpsilon = 0.5
+    initialDataPath = INITIAL_DATA_PATH
+    initialEpsilon = 0.4
     model.initDBSCAN(ssc, initialEpsilon, initialDataPath)
 
     # Step 2. Start Training Stream
-    print("\nSTART TRAINING\n")
+    training_data = data.select("time", "features")
+    print("\nSTART ONLINE PHASE\n")
+
     training_data_stream = (
         #TODO: I think processingTime === self.batchTime -> change it + add it to model
         training_data.writeStream
-        .trigger(processingTime="5 seconds")
+        .trigger(processingTime="10 seconds")
         .outputMode("update")
         .option("truncate", "false")
+        # .option("maxOffsetsPerTrigger", 10)
         .format("console")
         .foreachBatch(model.run)
         .start()
@@ -364,4 +382,30 @@ if __name__ == "__main__":
     # print(f"END broadcast: {broadcasted_var} \t {broadcasted_var.value}")
     print(f"END broadcastPMic: {model.broadcastPMic} \t {model.broadcastPMic.value}")
 
-    print("Stream Data Processing Application Completed.")
+    print("Stream Data Processing Completed.")
+    print("\n\n\nSTART OFFLINE PHASE\n")
+
+    #TODO: Finish Offline phase
+
+    # with open(f"data/toy_dataset.csv") as f:
+    #     pass
+    coreMicroClusters = model.getMicroClusters()
+    for i, mc in enumerate(coreMicroClusters):
+        print(f"micro {i}")
+        print(f"Micro cluster weight = {mc.weight}")
+        print(f"Micro cluster cf1x = {mc.cf1x}")
+        print(f"Micro cluster cf2x = {mc.cf2x}")
+        print(f"Micro cluster center = {mc.getCentroid()}")
+
+
+    OFFLINE_EPSILON, OFFLINE_MU = 0.4, 10 #TODO: remove this
+    offline_model = DDStreamOfflineModel(OFFLINE_EPSILON, OFFLINE_MU)
+    print()
+    coreMacroClusters = offline_model.getFinalClusters(coreMicroClusters)
+    print(f"Outside:")
+    for j, mc in enumerate(coreMacroClusters):
+        print(f"macro {j}")
+        print(f"Macro cluster weight = {mc.weight}")
+        print(f"Macro cluster cf1x = {mc.cf1x}")
+        print(f"Macro cluster cf2x = {mc.cf2x}")
+        print(f"Macro cluster center = {mc.getCentroid()}")
