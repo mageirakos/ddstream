@@ -514,7 +514,7 @@ class DDStreamModel:
                 self.oMicroClusters[i].setWeight(n, ts)
                 self.oMicroClusters[i].cf1x = self.oMicroClusters[i].cf1x + delta_cf1x
                 self.oMicroClusters[i].cf2x = self.oMicroClusters[i].cf2x + delta_cf2x
-                if self.oMicroClusters[i].getWeight() >= self.beta * self.mu:
+                if self.oMicroClusters[i].weight >= self.beta * self.mu:
                     print(f"upgradeToPMIC = {upgradeToPMIC}")
                     upgradeToPMIC.append(i)
 
@@ -572,7 +572,7 @@ class DDStreamModel:
             print(f"Merged outliers: {j}")
             if self.recursiveOutliersRMSDCheck == 1:
                 for k in newMCs:
-                    w = self.oMicroClusters[k].getWeight()
+                    w = self.oMicroClusters[k].weight
                     if w >= self.beta * self.mu:
                         upgradeToPMIC.append(k)
                         print(f"upgradeToPMIC = {upgradeToPMIC}")
