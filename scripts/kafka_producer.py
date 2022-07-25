@@ -23,7 +23,12 @@ def generate_stream():
             reader = file_reader(dataset)
             stream = next(reader)
         
-        producer.send(topic, value=bytes(stream, encoding="utf8"), key=bytes(str(total_processed), encoding="utf8"))
+        #TODO: Key is not correct -> key == total_processed only if rate = 1
+        #TODO: Key must be unique, we're not trying to have a unique key, we want timestamp
+        time = int(total_processed / rate)
+        # bkey = total_processed/time_interval # time_interval = 1000 by default
+        
+        producer.send(topic, value=bytes(str(time) + "/" + stream, encoding="utf8"))
         print(f"Sending '{dataset.split('/')[-1]}' to topic '{topic}', #{total_processed}")
 
         total_current_interval += 1
@@ -106,7 +111,7 @@ if __name__ == "__main__":
     DB_SOURCE = {
         "nsl-kdd-raw": DATA_PATH + "NSL-KDD/KDDTrain+_20Percent.txt",
         "nsl-kdd": DATA_PATH + "nsl-kdd-clean.txt",
-        "nsl-kdd-scaled": DATA_PATH + "nsl-kdd-clean.txt",
+        "nsl-kdd-scaled": DATA_PATH + "nsl-kdd-clean-scaled.txt",
         "kdd-99": DATA_PATH + "",
         "test": DATA_PATH + "test.csv",
         "toy": DATA_PATH + "toy_dataset.csv",
