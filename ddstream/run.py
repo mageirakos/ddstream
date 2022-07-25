@@ -15,7 +15,6 @@ from pyspark.ml.linalg import DenseVector, Vectors, VectorUDT
 
 # TODO: Use all of the arguments in the code outside of parse_args
 def parse_args():
-    # TODO: enhance with all additional arguments I am missing like epsilon, batch time etc.
     # Parse cli arguments
     parser = argparse.ArgumentParser(
         description="""This is the script responsible for running DDStream"""
@@ -287,9 +286,8 @@ if __name__ == "__main__":
     ) = parse_args()
 
     ssc = SparkSession.builder.appName("ddstream").getOrCreate()
-    # TODO: not sure this works correctly
     ssc.sparkContext.setLogLevel("WARN")
-    # TODO: All local files need to be added like so:
+    # All local files need to be added like so:
     ssc.sparkContext.addPyFile("ddstream/model.py")
     ssc.sparkContext.addPyFile("ddstream/microcluster.py")
 
@@ -309,22 +307,7 @@ if __name__ == "__main__":
     input_df1 = input_df.selectExpr(
         "CAST(key AS STRING)", "CAST(value AS STRING)", "timestamp"
     )
-    # random_stream = (
-    #     input_df.writeStream.trigger(processingTime="5 seconds")
-    #     .outputMode("update")
-    #     .option("truncate", "false")
-    #     .format("console")
-    #     # .foreachBatch(model.run)
-    #     .start()
-    # )
-    # random_stream.awaitTermination(TIMEOUT)  # end of stream
-    # random_stream.stop()
 
-    # input should be (key, Vector(doubles)): https://spark.apache.org/docs/latest/api/python/reference/api/pyspark.ml.linalg.DenseVector.html
-    # TODO: Might need to change again into numpy array instead of typical "Vector"
-    # --- but by vector(doubles) in Python I mean -> numpy Array
-    # Dense vectors are simply represented as NumPy array objects, so there is no need to covert them for use in MLlib
-    #
     print("\n")
 
     # database options : [ 'test', 'nsl-kdd', 'toy', 'init_toy']
@@ -341,7 +324,7 @@ if __name__ == "__main__":
     # random_stream.awaitTermination(TIMEOUT)  # end of stream
     # random_stream.stop()
 
-    # TODO: We don't need the label on the training data
+    # We don't need the label on the training data
     testing_data = data.select("key", "label", "features")
     training_data = data.select("key", "features")
 
@@ -354,7 +337,6 @@ if __name__ == "__main__":
     model = DDStreamModel(NUM_DIMENSIONS, BATCH_TIME)
 
     # Step 1. Initialize Micro Clusters
-    # TODO: Decide what to do with the initDBSCAN
     initialDataPath = "./data/init_toy_dataset.csv"  # must be path in container file tree (shared volume)
     # TODO: set initialEpsilon to 0.02 (after we standardise)
     initialEpsilon = 0.5
@@ -364,7 +346,8 @@ if __name__ == "__main__":
     print("\nSTART TRAINING\n")
     training_data_stream = (
         #TODO: I think processingTime === self.batchTime -> change it + add it to model
-        training_data.writeStream.trigger(processingTime="5 seconds")
+        training_data.writeStream
+        .trigger(processingTime="5 seconds")
         .outputMode("update")
         .option("truncate", "false")
         .format("console")

@@ -12,9 +12,7 @@ class DDStreamModel:
         self,
         numDimensions,
         batchTime = 5, #TODO: See where this is used and use it ()
-        # broadcasted_var,
-        # TODO: original: epsilon=16.0,
-        #TODO: change self.epsilon to smaller as most distances <1.0 (not even 16) -> because we standardized
+        #TODO: change self.epsilon to smaller as most distances <1.0 (not even 16 (original)) -> because we standardized
         epsilon=0.2,
         # TODO: set minPoints = 10.0
         minPoints=10.0,
@@ -23,7 +21,6 @@ class DDStreamModel:
         lmbda=0.25,
         Tp=2,
     ):
-        # self.broadcasted_var = broadcasted_var
         self.numDimensions = numDimensions
         self.batchTime = batchTime
         # TODO: check correct initialization etc.
@@ -131,7 +128,6 @@ class DDStreamModel:
                 self.expandCluster(newMC, neighborHoodList, initialEpsilon)
                 self.pMicroClusters.append(newMC)
 
-        # TODO: Check if we need to .collect() some rdd first before creating the broadcast variable as they are doing
         self.broadcastPMic = ssc.sparkContext.broadcast(
             list(zip(self.pMicroClusters, range(len(self.pMicroClusters))))
         )
@@ -164,8 +160,6 @@ class DDStreamModel:
         self.initialized = True
         print("END of Initialization\n")
 
-    # TODO: Is this only used in initialization?
-    # - I think yes
     # TODO: Test
     def getNeighborHood(self, pos: int, epsilon: float):
         """
@@ -187,10 +181,7 @@ class DDStreamModel:
             if i != pos and self.tag[i] != 1:
                 pts += 1
                 # print("-> YES")
-
-                # TODO: Figure out appropriate epsilon based on distance. ( Need to normalize init data )
-
-                # Euclidean distance is calculated correctly: https://stackoverflow.com/questions/1401712/how-can-the-euclidean-distance-be-calculated-with-numpy
+                # Euclidean distance : https://stackoverflow.com/questions/1401712/how-can-the-euclidean-distance-be-calculated-with-numpy
                 # print("Calculate distance: ")
                 # print(f"A:self.initArr[pos] - self.initArr[i] = {self.initArr[pos]} - {self.initArr[i]} = {self.initArr[pos] - self.initArr[i]}")
                 # TODO: Possible problem look into https://stackoverflow.com/questions/66806583/np-linalg-norm-ord-2-not-giving-euclidean-norm
@@ -232,8 +223,6 @@ class DDStreamModel:
 
     # TODO: Make sure that createing multiple rdd.contect.broadcast() objects is not a problem
     # and that all the workers use the same one
-    # TODO: It is possible broadcasted_var does not work correctly because the data has
-    # not yet been .collected() to the "main" in order to do the update?
 
     def run(self, streaming_df, batch_id):
         """Run .foreachBatch()"""
@@ -258,10 +247,8 @@ class DDStreamModel:
             # to_be_printed = assignations.collect()
             # for row in to_be_printed:
             #     print(f"assignations : minIndex={str(row[0])} , a={str(row[1])}")
-            # TODO: understand updateMicroClusters()
 
             self.updateMicroClusters(assignations)
-            #TODO: finish run()
             self.broadcastPMic = rdd.context.broadcast(
                 list(zip(self.pMicroClusters, range(len(self.pMicroClusters))))
             )
@@ -302,10 +289,8 @@ class DDStreamModel:
         # STEP 1: For each element in the RDD
         # print(f"broadcastPMic: {self.broadcastPMic} {self.broadcastPMic.value} {len(self.broadcastPMic.value)}")
         # print(f"{self.broadcastPMic.value[-1][0]}")
-        # TODO: Why print not work in assign() -> because in map??
         def assign(a):
             """:param a : point/row in batch format=(None, DenseVector([<features>]))"""
-            # TODO: check if correct:
             # TODO: Maybe we need to turn it back to DenseVector at the end of the function
             a = a[0], a[1].toArray()
 
@@ -324,35 +309,16 @@ class DDStreamModel:
                     if dist < minDist:
                         minDist, minIndex = dist, mc[1]
 
-                    # mc = {mc_location, index}
-                    # get the distance between the current point and the center of the microcluster
-                    # TODO: what is a[1] here? -> features?
-                    # dist = self.squaredDistance(a[1], mc[0].getCentroid)
-
-                # TODO: Understand this
                 # Step 4: Create a copy of the closest p microcluster to the point and insert it into it
                 pcopy = copy.deepcopy(self.broadcastPMic.value[minIndex][0])
 
                 # pcopy = self.broadcastPMic.value[minIndex][0].copy()
                 n = 0
-                # with open('blah.txt','a') as f:
-                #     n += 1
-                #     f.write(f"n={n} bPMic.value[{minIndex}][0] = {self.broadcastPMic.value[minIndex][0]} weight = {self.broadcastPMic.value[minIndex][0].weight}\n")
-                #     f.write(f"n={n} pcopy={pcopy}, weight = {pcopy.weight}\n")
-                #     f.write(f"n={n} inserting...\n")
-
                 pcopy.insert(a, 1)
-                # pcopy.insertAtT(a[1], a[0], 1)
-                # with open('blah.txt','a') as f:
-                #     n += 1
-                #     f.write(f"n={n} after insert after RMSD\n")
-                #     f.write(f"n={n}pcopy={pcopy}, weight = {pcopy.weight}\n")
-                #     f.write(f"n={n}pcopy RMSD={pcopy.getRMSD()}\n")
 
                 # Step 5: If the radius of this microcluster is larger than the epsilon then reset the minIndex (i.e the point is not inserted)
                 # - we still need to insert the point to the microcluster in the future
                 # - this only returns a tuple of (index_of_closest_mc, point) === (minIndex, a)
-                #TODO: change self.epsilon to smaller as most distances <1.0 (not even 16) -> because we standardized
                 if pcopy.getRMSD() > self.epsilon:
                     minIndex = -1
             else:
@@ -403,8 +369,6 @@ class DDStreamModel:
         """
         print("In computeDelta")
         # print(f"computeDelta input = {sortedRDD.collect()}")
-        # TODO: Do some python/spark magic for it to be in parallel
-        # basically a for loop to calculate deltas over entire rdd
         #TODO: How do we aggregate the Deltas once we .collect them? Since a different Delta has been computed at each node.
         def calcDelta(x):
             """
@@ -431,7 +395,6 @@ class DDStreamModel:
 
         
 
-    # TODO: Understand and code up function.
     def updateMicroClusters(self, assignations):
         """
         Algorithm 1 modified. (Cao et al. and Xu et al.)
@@ -474,9 +437,6 @@ class DDStreamModel:
         #     print(f"dataInPmic: {str(row)}")
         # works ok until here
 
-        # TODO: write aggregateFunction if needed:
-        # aggregateFunction = lambda x: pass
-
         # Step 2: Sort the data assigned to Pmic based on arrival order
         # print("updateMicroClusters: Step 2")
         # if you want to see dataInPmic.groupByKey() before sorting: https://stackoverflow.com/questions/29717257/pyspark-groupbykey-returning-pyspark-resultiterable-resultiterable
@@ -500,12 +460,10 @@ class DDStreamModel:
         dataInAndOut = assignations.filter(lambda x: x[0] == -1).map(lambda x: x[1])
         print(f"dataInAndOut: {dataInAndOut.collect()}")
         
-        #TODO: dataOut seems to not be needed --> same as 'outliers'
         # dataOut: data not assigned to primary microclusters that have not been assigned to outlier microcluster
         # or not assigned to any cluster -> index == -1
         dataOut = self.assignToOutlierCluster(dataInAndOut)
         # data in outlier microclusters
-        #TODO: Adjust code to handle:
         print(f"dataOut = {dataOut.collect()}")
         dataOut.persist()
             
@@ -516,7 +474,6 @@ class DDStreamModel:
         omicSortedRDD = dataInOmic.groupByKey().mapValues(lambda x: sorted(list(x), key=lambda y : y[0]))
         dataInOmicSS = self.computeDelta(omicSortedRDD)
             
-        totalIn = 0 #TODO: Remove as it might be useless
         realOutliers = outliers.collect()
         
         assignations.unpersist()
@@ -525,7 +482,6 @@ class DDStreamModel:
         DriverTime = time.time()
 
         ##### ---- Global Update Step
-        #TODO: Continue code
         print("\t----Global Update Step:----")
         print(f"dataInPmicSS= {dataInPmicSS}")
         #TODO: Test exactly how deltas are applied, need to better understand effect.
@@ -580,7 +536,7 @@ class DDStreamModel:
             for point in realOutliers:
                 ts, point_vals = point[0], point[1]
                 minDist, idMinDist, merged = float("inf"), 0, 0
-                #TODO: What is this -> redundant?
+                #TODO: What is recursiveOutliersRMSDCheck -> redundant?
                 #TODO: Check if we can create oMicroClusters in InitDBSCAn rather than at this point (maybe start out with some oMicroClusters....)
                 if len(self.oMicroClusters) > 0 and self.recursiveOutliersRMSDCheck == 1:
                     # if we created a newMC on a previous point of the realOutliers (try to insert)
@@ -679,5 +635,3 @@ class DDStreamModel:
         #TODO: What is this?
         self.time = self.time - self.batchTime
         self.ModelDetect()
-
-    # TODO: add setters/getters anything I missed that might be used

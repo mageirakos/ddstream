@@ -95,7 +95,6 @@ class CoreMicroCluster:
     def getWeight(self):
         return self.weight
 
-    # TODO: Fix this returns centroid that are way off
     def getCentroid(self):
         """Get center of CoreMicroCluster (Definition 3.3 - Cao et al.)"""
         # print(f"in getCentroid for {self}")
@@ -128,40 +127,27 @@ class CoreMicroCluster:
         else:
             return float("inf")
 
-    def copy(self):
-        # TODO: Redandunt can use copy.deepcopy?
-        return CoreMicroCluster(
-            cf2x=self.cf2x,
-            cf1x=self.cf1x,
-            weight=self.weight,
-            t0=self.t0,
-            lastEdit=self.lastEdit,
-            lmbda=self.lmbda,
-            tfactor=self.tfactor,
-        )
 
-    # TODO: Fix this as point is some sort of np array
-    # TODO: See where this is used
-    # point: ((None, DenseVector(<features>)),1) ?
-    # point: (timestamp, list[float])
     def insert(self, point, n):
-        # print(f"\nIn Insert {point}\n")
+        """
+        Incremental insert of point into CoreMicroCluster (Property 3.1 Cao et al.)
+
+        :param point = (timestamp, np.array<features>)
+        :param n = 
+        """
         ts, point_vals = point[0], point[1]
         self.setWeight(n, ts)
         self.cf1x = self.cf1x + point_vals
         self.cf2x = self.cf2x + point_vals * point_vals
-        # print("type(cf2x,cf1x) after insert: ", type(self.cf2x), type(self.cf1x))
-        # self.setCf1x([a + p for a, p in zip(self.cf1x, point[1])])
-        # self.setCf2x([a + p * p for a, p in zip(self.cf2x, point[1])])
 
-    # this is used during initDBSCAN
     def insertAtT(self, point, time, n):
         """
-        Incremental insert of point into CoreMicroCluster (Property 3.1 Cao et al.)
+        Incremental insert of point at time into CoreMicroCluster (Property 3.1 Cao et al.)
 
         :param point = numpy.ndarray
+        :param time = timestamp of point arrival
+        :param n = 
         """
-        # call seWeight first which recalculated weight, cf1, cf2 for new 'time'
         self.setWeight(n, time)
         self.cf1x += point
         self.cf2x += point * point
