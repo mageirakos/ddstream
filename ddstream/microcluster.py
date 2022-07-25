@@ -92,6 +92,7 @@ class CoreMicroCluster:
             self.setWeight(0, t)
             return self.weight
 
+    #TODO: Redundant -> change in code 
     def getWeight(self):
         return self.weight
 
