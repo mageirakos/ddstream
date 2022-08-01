@@ -361,12 +361,6 @@ if __name__ == "__main__":
     # Step 2. Start Training Stream
     training_data = data.select("time", "features")
     print("\nSTART ONLINE PHASE\n")
-    # start streaming in DELAY seconds
-    DELAY = 5
-    subprocess.run(
-        f"sleep {DELAY} && python3 scripts/kafka_producer.py -s toy -r 1 --topic test --total_data 100000",
-        shell=True,
-    )
 
 
     training_data_stream = (
