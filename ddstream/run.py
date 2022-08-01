@@ -4,6 +4,7 @@ from offline import DDStreamOfflineModel
 
 # general
 import argparse
+import subprocess
 from pyspark.sql import SparkSession
 
 # import numpy as np
@@ -360,11 +361,18 @@ if __name__ == "__main__":
     # Step 2. Start Training Stream
     training_data = data.select("time", "features")
     print("\nSTART ONLINE PHASE\n")
+    # start streaming in DELAY seconds
+    DELAY = 5
+    subprocess.run(
+        f"sleep {DELAY} && python3 scripts/kafka_producer.py -s toy -r 1 --topic test --total_data 100000",
+        shell=True,
+    )
+
 
     training_data_stream = (
         #TODO: I think processingTime === self.batchTime -> change it + add it to model
         training_data.writeStream
-        .trigger(processingTime="10 seconds")
+        .trigger(processingTime=f"{BATCH_TIME} seconds")
         .outputMode("update")
         .option("truncate", "false")
         # .option("maxOffsetsPerTrigger", 10)
