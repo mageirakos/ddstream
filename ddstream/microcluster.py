@@ -19,6 +19,8 @@ class CoreMicroCluster:
         lastEdit,
         lmbda,
         tfactor=1.0,
+        num_labels=3,
+        label=None,
     ):
         """
         Initialize CoreMicroCluster. (Definition 3.4 - Cao et al.)
@@ -28,8 +30,9 @@ class CoreMicroCluster:
         :param weight   = param to determine threshold of outlier relative to c-micro cluster (w > beta*mu)
         :param t0       = timestamp of CoreMicroCluster creation
         :param lastEdit = last time an edit (weight, cf1, cf2 recalculation) happened
-        :param lmbda    = 
+        :param lmbda    =
         :param tfactor  =
+        :param num_labels = number of unique clusters/labels in dataset (defalut 3)
         """
         self.cf2x = cf2x
         self.cf1x = cf1x
@@ -38,6 +41,25 @@ class CoreMicroCluster:
         self.lastEdit = lastEdit
         self.lmbda = lmbda
         self.tfactor = tfactor
+        # During initialization only 1 point in mc so :
+        self.pts = 1
+        self.num_labels = num_labels
+        self.lbl_counts = [0] * self.num_labels
+        self.lbl_counts[label] += 1
+        self.correctPts = 1
+        self.label = self.lbl_counts.index(max(self.lbl_counts))
+        self.purity = None
+
+    # TODO: handle
+    def calcPurity(self):
+        lbl = self.getLabel()
+        self.purity = self.correctPts / self.lbl_counts[lbl]
+        return self.purity
+
+    def getLabel(self):
+        self.correctPts = max(self.lbl_counts)
+        self.label = self.lbl_counts.index(self.correctPts)
+        return self.label
 
     def calcCf2x(self, dt):
         """
@@ -99,7 +121,6 @@ class CoreMicroCluster:
             self.setWeight(0, t)
             return self.weight
 
-
     def getCentroid(self):
         """Get center of CoreMicroCluster (Definition 3.3 - Cao et al.)"""
         # print(f"in getCentroid for {self}")
@@ -132,30 +153,36 @@ class CoreMicroCluster:
         else:
             return float("inf")
 
-
-    def insert(self, point, n):
+    def insert(self, point, n, label=None):
         """
         Incremental insert of point into CoreMicroCluster (Property 3.1 Cao et al.)
 
         :param point = (timestamp, np.array<features>)
-        :param n = 
+        :param n =
         """
         ts, point_vals = point[0], point[1]
         self.setWeight(n, ts)
         self.cf1x = self.cf1x + point_vals
         self.cf2x = self.cf2x + point_vals * point_vals
+        self.pts += n
+        if label:
+            self.lbl_counts[label] += 1
 
-    def insertAtT(self, point, time, n):
+    def insertAtT(self, point, time, n, label):
         """
         Incremental insert of point at time into CoreMicroCluster (Property 3.1 Cao et al.)
 
         :param point = numpy.ndarray
         :param time = timestamp of point arrival
-        :param n = 
+        :param n =
         """
+        # print(f"insertATt| point = {point}, label = {label}")
         self.setWeight(n, time)
         self.cf1x += point
         self.cf2x += point * point
+        self.pts += n
+        self.lbl_counts[label] += 1
+        # print(f"lbl_counts = {self.lbl_counts}")
 
     # TODO : Is this correct merging? Should weight be recalculated? Why max(lastEdit)?
     # TODO : Not using this anywhere...

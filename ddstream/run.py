@@ -29,7 +29,7 @@ def parse_args():
         "--batchTime",
         default="5",
         type=int,
-        help="Batch Time (default '5')",
+        help="Batch Time (default 5)",
     )
     optional.add_argument(
         "--appName",
@@ -40,38 +40,44 @@ def parse_args():
         "--numDimensions",
         default="80",
         type=int,
-        help="Number of dimensions (default '80')",
+        help="Number of dimensions (default 80)",
     )
     optional.add_argument(
         "--speedRate",
         default="1000",
         type=int,
-        help="Speed Rate input (default '1000')",
+        help="Speed Rate input (default 1000)",
+    )
+    optional.add_argument(
+        "--numLabels",
+        default="3",
+        type=int,
+        help="Number of distinct Labels (default 3)",
     )
     # The number of initialData should be the same as the flow rate
     optional.add_argument(
         "--initialDataAmount",
         default="2500",
         type=int,
-        help="Initial data amount (default '2500')",
+        help="Initial data amount (default 2500)",
     )
     optional.add_argument(
         "--lmbda",
         default="0.25",
         type=float,
-        help="Lambda (default '0.25')",
+        help="Lambda (default 0.25)",
     )
     optional.add_argument(
         "--epsilon",
         default="16",
         type=int,
-        help="epsilon (default '16')",
+        help="epsilon (default 16)",
     )
     optional.add_argument(
         "--initialEpsilon",
         default="0.02",
         type=float,
-        help="Initial epsilon (default '0.02')",
+        help="Initial epsilon (default 0.02)",
     )
     # A core object is defined as an object, in whose ≤ neighborhood the overall weight of data points is at least an integer μ.
     # mu == minPoints
@@ -79,19 +85,19 @@ def parse_args():
         "--mu",
         default="10.0",
         type=float,
-        help="mu (default '10.0')",
+        help="mu (default 10.0)",
     )
     optional.add_argument(
         "--beta",
         default="0.2",
         type=float,
-        help="beta (default '0.2')",
+        help="beta (default 0.2)",
     )
     optional.add_argument(
         "--tfactor",
         default="1.0",
         type=float,
-        help="tfactor (default '1.0')",
+        help="tfactor (default 1.0)",
     )
     # TODO: Fix
     optional.add_argument(
@@ -103,13 +109,13 @@ def parse_args():
         "--offlineEpsilon",
         default="0.2",
         type=float,
-        help="offline epsilon (default '0.2')",
+        help="offline epsilon (default 0.2)",
     )
     # TODO: What is this where is it used
     optional.add_argument(
         "--trainingDataAmount",
         default="100",
-        help="Training data amount (default '100')",
+        help="Training data amount (default 100)",
     )
     # TODO: What?
     optional.add_argument(
@@ -121,7 +127,7 @@ def parse_args():
         "--k",
         default="5",
         type=int,
-        help="k (default '5')",
+        help="k (default 5)",
     )
     # TODO: What?
     optional.add_argument(
@@ -133,14 +139,14 @@ def parse_args():
         "--offlineMu",
         default="10.0",
         type=float,
-        help="Offline mu (default '10.0')",
+        help="Offline mu (default 10.0)",
     )
     # TODO: what?
     optional.add_argument(
         "--check",
         default="1",
         type=int,
-        help="check  (default '1')",
+        help="check  (default 1)",
     )
     # inputPath
     optional.add_argument(
@@ -169,6 +175,7 @@ def parse_args():
     appName = args.appName
     numDimensions = args.numDimensions
     speedRate = args.speedRate
+    numLabels = args.numLabels
     initialDataAmount = args.initialDataAmount
     lmbda = args.lmbda
     epsilon = args.epsilon
@@ -193,6 +200,7 @@ def parse_args():
         appName,
         numDimensions,
         speedRate,
+        numLabels,
         initialDataAmount,
         lmbda,
         epsilon,
@@ -219,7 +227,7 @@ def parse_args():
 def split_data(streaming_df, database="nsl-kdd"):
     # print("STEP 0: In split_data")
     """Change the input stream to be (label, Vector<features>)"""
-    #TODO: This can be take from numDimensions
+    # TODO: This can be take from numDimensions
     if database == "nsl-kdd":
         num_feats = 33
     elif database == "test":
@@ -246,23 +254,24 @@ def split_data(streaming_df, database="nsl-kdd"):
     # np array # dense_features = udf(lambda arr: np.array(get_features(arr)))
     split_df = streaming_df.select(
         streaming_df["key"].cast("Long"),
-        split(streaming_df["value"], "/").alias("ts-vals")
+        split(streaming_df["value"], "/").alias("ts-vals"),
     )
 
     # split_df = split_df.select(
-        # split(split_df["ts-vals"].getItem(1), ",").alias("full_input_array"),
+    # split(split_df["ts-vals"].getItem(1), ",").alias("full_input_array"),
     # )
     # print(f"SPLIT_DF:{split_df}")
     split_df = split_df.withColumn("time", split_df["ts-vals"].getItem(0)).withColumn(
-        "label_feats", split_df["ts-vals"].getItem(1))
-        
+        "label_feats", split_df["ts-vals"].getItem(1)
+    )
+
     split_df = split_df.select(
         split_df["key"].cast("Long"),
         split_df["time"].cast("Long"),
         split(split_df["label_feats"], ",").alias("full_input_array"),
     )
     result = split_df.withColumn(
-        "label", split_df["full_input_array"].getItem(num_feats)
+        "label", split_df["full_input_array"].getItem(num_feats).cast("Int")
     ).withColumn("features", dense_features(split_df["full_input_array"]))
     print("STEP 2: Leaving split_data")
     return result
@@ -281,6 +290,7 @@ if __name__ == "__main__":
         APP_NAME,
         NUM_DIMENSIONS,
         SPEED_RATE,
+        NUM_LABELS,
         INITIAL_DATA_AMOUNT,
         LAMBDA,
         EPSILON,
@@ -307,7 +317,6 @@ if __name__ == "__main__":
     ssc.sparkContext.addPyFile("ddstream/model.py")
     ssc.sparkContext.addPyFile("ddstream/microcluster.py")
     ssc.sparkContext.addPyFile("ddstream/offline.py")
-
 
     # Streaming Query
     # TODO: Maybe using StreamingListener is a must (I need it to print some results )
@@ -351,6 +360,7 @@ if __name__ == "__main__":
     model.epsilon = 0.4
     model.mu = 10
     model.lmbda = 0.25
+    model.NUM_LABELS = NUM_LABELS
 
     # Step 1. Initialize Micro Clusters
     initialDataPath = "./data/init_toy_dataset.csv"  # must be path in container file tree (shared volume)
@@ -359,14 +369,14 @@ if __name__ == "__main__":
     model.initDBSCAN(ssc, initialEpsilon, initialDataPath)
 
     # Step 2. Start Training Stream
-    training_data = data.select("time", "features")
+
+    # NUM_LABELS
+    training_data = data.select("time", "features", "label")
     print("\nSTART ONLINE PHASE\n")
 
-
     training_data_stream = (
-        #TODO: I think processingTime === self.batchTime -> change it + add it to model
-        training_data.writeStream
-        .trigger(processingTime=f"{BATCH_TIME} seconds")
+        # TODO: I think processingTime === self.batchTime -> change it + add it to model
+        training_data.writeStream.trigger(processingTime=f"{BATCH_TIME} seconds")
         .outputMode("update")
         .option("truncate", "false")
         # .option("maxOffsetsPerTrigger", 10)
@@ -387,27 +397,33 @@ if __name__ == "__main__":
     print("Stream Data Processing Completed.")
     print("\n\n\nSTART OFFLINE PHASE\n")
 
-    #TODO: Finish Offline phase
+    # TODO: Finish Offline phase
 
     # with open(f"data/toy_dataset.csv") as f:
     #     pass
     coreMicroClusters = model.getMicroClusters()
     for i, mc in enumerate(coreMicroClusters):
-        print(f"micro {i}")
+        print(f"cluster {i}")
         print(f"Micro cluster weight = {mc.weight}")
         print(f"Micro cluster cf1x = {mc.cf1x}")
         print(f"Micro cluster cf2x = {mc.cf2x}")
         print(f"Micro cluster center = {mc.getCentroid()}")
+        print(f"Micro cluster center = {mc.getCentroid()}")
+        print(f"Micro cluster purity = {mc.calcPurity()}")
+    avg_purity = model.calcAvgPurity(coreMicroClusters)
+    print(f"AVERAGE PURITY (micro clusters) = {avg_purity}")
 
-
-    OFFLINE_EPSILON, OFFLINE_MU = 0.4, 10 #TODO: remove this
+    OFFLINE_EPSILON, OFFLINE_MU = 0.4, 10  # TODO: remove this
     offline_model = DDStreamOfflineModel(OFFLINE_EPSILON, OFFLINE_MU)
     print()
     coreMacroClusters = offline_model.getFinalClusters(coreMicroClusters)
     print(f"Outside:")
     for j, mc in enumerate(coreMacroClusters):
-        print(f"macro {j}")
+        print(f"cluster {j}")
         print(f"Macro cluster weight = {mc.weight}")
         print(f"Macro cluster cf1x = {mc.cf1x}")
         print(f"Macro cluster cf2x = {mc.cf2x}")
         print(f"Macro cluster center = {mc.getCentroid()}")
+        print(f"Macro cluster purity = {mc.calcPurity()}")
+    avg_purity = offline_model.calcAvgPurity(coreMicroClusters)
+    print(f"AVERAGE PURITY (macro clusters) = {avg_purity}")
