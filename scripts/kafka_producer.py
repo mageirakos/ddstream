@@ -29,7 +29,8 @@ def generate_stream():
         # bkey = total_processed/time_interval # time_interval = 1000 by default
         
         producer.send(topic, value=bytes(str(time) + "/" + stream, encoding="utf8"))
-        print(f"Sending '{dataset.split('/')[-1]}' to topic '{topic}', #{total_processed}")
+        # 
+        print(f"{time}) '{dataset.split('/')[-1]}' to topic '{topic}', #{total_processed}")
 
         total_current_interval += 1
         total_processed += 1

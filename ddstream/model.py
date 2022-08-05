@@ -1,34 +1,36 @@
-
 from microcluster import CoreMicroCluster
+from utils import *
 
 # general
 import time, math, copy
 import numpy as np
 
-#TODO: Check that weight etc. is calculated/decaied based on cluster t0 ( which is when cluster was created etc. )
+# TODO: Check that weight etc. is calculated/decaied based on cluster t0 ( which is when cluster was created etc. )
+
 
 class DDStreamModel:
     def __init__(
         self,
         numDimensions,
-        batchTime = 5, #TODO: See where this is used and use it ()
-        #TODO: change self.epsilon to smaller as most distances <1.0 (not even 16 (original)) -> because we standardized
-        epsilon=0.5,
-        # TODO: set minPoints = 10.0
-        # minPoints=10.0,
-        beta=0.2,
-        mu=3.0,
-        lmbda=0.2,
+        batchTime,  # TODO: See where this is used and use it ()
+        # TODO: change self.epsilon to smaller as most distances <1.0 (not even 16 (original)) -> because we standardized
+        epsilon,
+        beta,
+        mu,
+        lmbda,
+        num_labels,
         Tp=4,
     ):
         self.numDimensions = numDimensions
         self.batchTime = batchTime
         # TODO: check correct initialization etc.
         self.eps = 0.01
+        self.NUM_LABELS = num_labels
 
         self.time = 0
         self.N = 0
         self.currentN = 0
+        self.batch_id = None
 
         # list of microcluster objects
         self.pMicroClusters = []
@@ -42,10 +44,10 @@ class DDStreamModel:
 
         # only used during initilization (initDBSCAN)
         self.initArr = np.asarray([])
+        self.initLabels = []
         self.tag = []
 
         self.epsilon = epsilon
-        # self.minPoints = minPoints
         self.beta = beta
         self.mu = mu
         self.Tp = Tp
@@ -54,28 +56,23 @@ class DDStreamModel:
         self.modelDetectPeriod = 0
 
         self.lastEdit = 0
-        self.tfactor = 1.0
 
         # idk
         self.AlldriverTime = 0.0
         self.AlldetectTime = 0.0
         self.AllprocessTime = 0.0
 
-    def setCheck(self, t):
-        self.tfactor = t
-
-    def setTp(self):
-        # this.Tp = Math.round(1 / this.lambda * Math.log((this.beta * this.mu) / (this.beta * this.mu - 1))) + 1
-        pass
-
     def getMicroClusters(self):
+        #TODO: what to return here?
+        print(f"\tin getMicroClusters")
+        print(f"self.pMicroClusters = {self.pMicroClusters}\n")
+        print(f"self.broadcastPMic = {self.broadcastPMic.value}\n")
+
         return self.pMicroClusters
 
-
     # TODO: Test (test with initLabels and calculations)
-    def initDBSCAN(
-        self, ssc, initialEpsilon = 0.5, path="./data/init_toy_dataset.csv"
-    ):
+    # TODO: Handle .lbl_counts etc. in code below (probably in insert?)
+    def initDBSCAN(self, ssc, initialEpsilon=0.5, path="./data/init_toy_dataset.csv"):
         """
         Initialize DBSCAN microcluster.
 
@@ -84,17 +81,19 @@ class DDStreamModel:
         :param path             = must be path to container volume that cointaines initialization data
         """
         print("START of Initialization")
+        self.batch_id = -1
         # 1. Read init data file
         with open(path) as f:
-            lines, initLabels = f.readlines(), []
+            lines = f.readlines()
             for i, line in enumerate(lines):
                 tmp = line.split(",")
                 # print(f"adding {tmp} to initArr")
                 # assume label at end (either int or str/obj)
+                # TODO: If label is string turn to int
                 try:
-                    initLabels.append(int(tmp[-1]))
+                    self.initLabels.append(int(tmp[-1]))
                 except:
-                    initLabels.append(str(tmp[-1]))
+                    self.initLabels.append(str(tmp[-1]))
                 self.initArr = np.append(
                     self.initArr, np.asarray(list(map(lambda x: float(x), tmp[:-1])))
                 )
@@ -119,19 +118,20 @@ class DDStreamModel:
             # )
             if len(neighborHoodList) > self.mu:
                 self.tag[0] = 1
-                # new microcluster for a core data point ( since neighborhood > minpts)
+                # new microcluster for a core data point ( since neighborhood > mu)
                 # X num of dimensions -> len(cf2x) = len(cf1x) = X
-                
+
                 newMC = CoreMicroCluster(
                     cf2x=self.initArr[i] * self.initArr[i],  # element wise mult
                     cf1x=self.initArr[i],
                     weight=1.0,
-                    t0=0, # timestamp of CoreMicroCluster creation
-                    lastEdit=0, # when initializing same as timestamp of CoreMicroCluster creation
+                    t0=0,  # timestamp of CoreMicroCluster creation
+                    lastEdit=0,  # when initializing same as timestamp of CoreMicroCluster creation
                     lmbda=self.lmbda,
-                    tfactor=self.tfactor,
+                    num_labels=self.NUM_LABELS,
+                    label=self.initLabels[i],
                 )
-                # print(f"Point {self.initArr[i]} has neighborhood > minPts = {neighborHoodList}")
+                # print(f"Point {self.initArr[i]} has neighborhood > mu = {neighborHoodList}")
                 # print(f"Creating newMC {newMC} with cf1x = {newMC.cf1x}")
                 # expandCluster adds all neighborhood points to the newMC
                 self.expandCluster(newMC, neighborHoodList, initialEpsilon)
@@ -140,7 +140,7 @@ class DDStreamModel:
         self.broadcastPMic = ssc.sparkContext.broadcast(
             list(zip(self.pMicroClusters, range(len(self.pMicroClusters))))
         )
-        #TODO: Fix initDBSCAN to create outlier clusters
+        # TODO: Fix initDBSCAN to create outlier clusters
         self.broadcastOMic = ssc.sparkContext.broadcast(
             list(zip(self.oMicroClusters, range(len(self.oMicroClusters))))
         )
@@ -160,9 +160,9 @@ class DDStreamModel:
 
         print(f"number of pMicroClusters = {len(self.pMicroClusters)}")
         # print centroids
-        for mc in self.broadcastPMic.value:
-            print(f"mc =  {mc[1]} with centroid =  {mc[0].getCentroid()}")
-        print(f"number of oMicroClusters = {len(self.oMicroClusters)}")
+        # for mc in self.broadcastPMic.value:
+        #     print(f"mc =  {mc[1]} center =  {mc[0].getCentroid()} w = {mc[0].weight} lbl_counts = {mc[0].lbl_counts} pts = {mc[0].pts} label = {mc[0].getLabel()} correctPts = {mc[0].correctPts}")
+        # print(f"number of oMicroClusters = {len(self.oMicroClusters)}")
         not_in_mc = len(list(filter(lambda x: x == 0, self.tag)))
         print(f"Points not added to MicroClusters = {not_in_mc}")
 
@@ -221,7 +221,12 @@ class DDStreamModel:
 
         # recursively expand the cluster based on newly added points
         for neighbor in neighborHoodList:
-            newMC.insertAtT(point=self.initArr[neighbor], time=0, n=1.0)
+            newMC.insertAtT(
+                point=self.initArr[neighbor],
+                time=0,
+                n=1,
+                label=self.initLabels[neighbor],
+            )
 
             # print(f"neighbor = {neighbor}\nneighborHoodList = {neighborHoodList}")
             neighborHoodList2 = self.getNeighborHood(neighbor, initialEpsilon)
@@ -232,8 +237,29 @@ class DDStreamModel:
     # TODO: Make sure that createing multiple rdd.contect.broadcast() objects is not a problem
     # and that all the workers use the same one
 
+    def calcAvgPurity(self, mcs):
+        """
+        Calculate the average purity as defined in Cao et al.
+        where avg_pur = nominator / denominator
+                nominator = Σ (dominant_lbl_pts / total_points) ( Σ over all K clusters )
+                demoninator = K (num_of_clusters)
+        :param mcs: broadcasted object (either PMIC or OMIC)
+        :return average_purity_metric  (float)
+        """
+        num_of_clusters, purity_sum = len(mcs), 0
+        if num_of_clusters == 0:
+            return None
+        for mc in mcs:
+            actual_mc = mc
+            if type(mc) == tuple:
+                actual_mc, _ = mc[0], mc[1]
+            purity_sum += actual_mc.calcPurity()
+        return purity_sum / num_of_clusters
+
     def run(self, streaming_df, batch_id):
+        global DETAILS, MICRO_CLUSTERS
         """Run .foreachBatch()"""
+        self.batch_id = batch_id
         print(f"\nBATCH: {batch_id}", streaming_df, end="\n")
         # Step 0: Initializatino of Micro Clusters must have already been done
         # Step 1: Split to each rdd
@@ -241,6 +267,7 @@ class DDStreamModel:
         rdd = streaming_df.rdd.map(tuple)
         # # only for printing:
         # to_be_printed = rdd.collect()
+        # print(f"RDD: {to_be_printed}")
         # for row in to_be_printed:
         #     print(f"rdd: _1 = {str(row[0])} , _2 = {str(row[1])}, all = {str(row)}")
 
@@ -248,43 +275,83 @@ class DDStreamModel:
         if not rdd.isEmpty() and self.initialized:
             batch_start_t = time.time()
             print(f"The time is now: {self.lastEdit}")
-
+            print()
             # Step 3: Assign each point in the rdd to closest micro cluster (if radius<epsilon)
             assignations = self.assignToMicroCluster(rdd)
             # # only for printing:
             # to_be_printed = assignations.collect()
+            # print(f"ASSIGNATIONS: {to_be_printed}")
             # for row in to_be_printed:
-            #     print(f"assignations : minIndex={str(row[0])} , a={str(row[1])}")
+            #     print(f"assignations : minIndex={str(row[0])} , feats={str(row[1])}, label={str(row[2])}")
 
             self.updateMicroClusters(assignations)
             self.broadcastPMic = rdd.context.broadcast(
                 list(zip(self.pMicroClusters, range(len(self.pMicroClusters))))
             )
-            print(f"After batch {batch_id} number of p microclusters: {len(self.broadcastPMic.value)}")
-            # for mc in self.broadcastPMic.value:
-            #     print(f"pmic {mc[0]}\n\tlast_t={mc[0].lastEdit} w = {mc[0].weight} center = {mc[0].getCentroid()}")
+            
             self.broadcastOMic = rdd.context.broadcast(
                 list(zip(self.oMicroClusters, range(len(self.oMicroClusters))))
             )
-            print(f"After batch {batch_id} number of o microclusters: {len(self.broadcastOMic.value)}")
-            # for mc in self.broadcastOMic.value:
-            #     print(f"omic {mc[0]}\n\tlast_t={mc[0].lastEdit} w ={mc[0].weight} center = {mc[0].getCentroid()}")
-            # print(f"batch_{batch_id} OutlierMC ({batch_id}) = {self.oMicroClusters} \n {self.oMicroClusters.value}")
-            
-
             detectTime = time.time()
             # every 4 batches apply remove decayied pMicroClusters
             if self.modelDetectPeriod != 0 and self.modelDetectPeriod % 4 == 0:
                 # print(f"Start Model Checking - Batch{batch_id}")
                 self.ModelDetect()
-                self.broadcastPMic = rdd.context.broadcast(list(zip(self.pMicroClusters, range(len(self.pMicroClusters)))))
-                self.broadcastOMic = rdd.context.broadcast(list(zip(self.oMicroClusters, range(len(self.oMicroClusters)))))
+                self.broadcastPMic = rdd.context.broadcast(
+                    list(zip(self.pMicroClusters, range(len(self.pMicroClusters))))
+                )
+                self.broadcastOMic = rdd.context.broadcast(
+                    list(zip(self.oMicroClusters, range(len(self.oMicroClusters))))
+                )
 
             self.AllprocessTime += time.time() - batch_start_t
             detectTime = time.time() - detectTime
             self.AlldetectTime += detectTime
             self.modelDetectPeriod += 1
             # print(f"Model checking completed... detect time taken (ms) = {detectTime}")
+            # ------------------ STATUS PRINTS ---------------------
+            # primary
+            print("Primary mc:")
+            print(f"After batch {batch_id} number of p microclusters: {len(self.broadcastPMic.value)}")
+            for i, mc in enumerate(self.broadcastPMic.value):
+                print(f"pmic_{i} last_t={mc[0].lastEdit} w = {mc[0].weight} center = {mc[0].getCentroid()} lbl_counts = {mc[0].lbl_counts} pts = {mc[0].pts} label = {mc[0].getLabel()} correctPts = {mc[0].correctPts} purity = {mc[0].calcPurity()}")
+            # primary purity
+            pmic_avg_purity = self.calcAvgPurity(self.broadcastPMic.value)
+            print(f"After batch {batch_id} number of p microclusters: {len(self.broadcastPMic.value)}")
+            print(f"AVERAGE PURITY (pmic) = {pmic_avg_purity}")
+            # outlier
+            print(f"Outlier mc :")
+            for i, mc in enumerate(self.broadcastOMic.value):
+                print(f"omic_{i} last_t={mc[0].lastEdit} w ={mc[0].weight} center = {mc[0].getCentroid()} lbl_counts = {mc[0].lbl_counts} pts = {mc[0].pts} label = {mc[0].getLabel()} correctPts = {mc[0].correctPts} purity = {mc[0].calcPurity()}")
+            
+            # print(f"batch_{batch_id} OutlierMC ({batch_id}) = {self.oMicroClusters} \n {self.oMicroClusters.value}")
+            # omic_avg_purity = self.calcAvgPurity(self.broadcastOMic.value)
+            # print(
+            #     f"After batch {batch_id} number of o microclusters: {len(self.broadcastOMic.value)}"
+            # )
+            # print(f"AVERAGE PURITY (omic) = {omic_avg_purity}")
+            # ------------------ EXPERIMENT DATA ---------------------
+            # TODO NOW: Save MICRO_CLUSTERS, MICRO_METRICS '/data/experiments/<dataset_d>
+            
+            for i, mc in enumerate(self.broadcastPMic.value):
+                microcl, _ = mc[0], mc[1]
+                append_to_MICRO_CLUSTERS(
+                    batch_id=self.batch_id,
+                    microcluster_id=id(microcl),
+                    centroid=microcl.getCentroid().tolist(),
+                    cf1x=microcl.cf1x.tolist(),
+                    cf2x=microcl.cf2x.tolist(),
+                    weight=microcl.weight,
+                    t0=microcl.t0,
+                    lastEdit=microcl.lastEdit,
+                    pts=microcl.pts,
+                    lbl_counts=microcl.lbl_counts,
+                    correctPts=microcl.correctPts,
+                    label=microcl.getLabel(),
+                    purity=microcl.calcPurity())
+            # append avg purity from above microclusters in current batch
+            avg_purity = self.calcAvgPurity(self.broadcastPMic.value)
+            append_to_MICRO_METRICS(batch_id=self.batch_id, name="PURITY(avg)", value=avg_purity)
 
 
 
@@ -303,7 +370,8 @@ class DDStreamModel:
         def assign(a):
             """:param a : point/row in batch format=(None, DenseVector([<features>]))"""
             # TODO: Maybe we need to turn it back to DenseVector at the end of the function
-            a = a[0], a[1].toArray()
+            # TODO: a[2] is label, should it be int? or just string
+            a = a[0], a[1].toArray(), a[2]
 
             minDist, minIndex = float("inf"), -1
             # TODO: init pcopy
@@ -334,7 +402,7 @@ class DDStreamModel:
                     minIndex = -1
             else:
                 minIndex = -1
-            return minIndex, a#, pcopy.getRMSD(), self.epsilon
+            return minIndex, a
 
         return rdd.map(lambda a: assign(a))
 
@@ -343,10 +411,11 @@ class DDStreamModel:
         For the points not assigned to a primary microcluster, assing them to an outlier microcluster.
         :param rdd: RDD of outlier points (timestamp, <features>)
         """
+
         def assign(a):
             # if we have no outlier microclusters
             minIndex = -1
-            #TODO: We don't seem to have created any outlier micro clusters anywhere.
+            # TODO: We don't seem to have created any outlier micro clusters anywhere.
             if len(self.broadcastOMic.value) > 0:
                 minDist = float("inf")
                 for mc in self.broadcastOMic.value:
@@ -361,14 +430,15 @@ class DDStreamModel:
             else:
                 minIndex = -1
             return minIndex, a
+
         return rdd.map(lambda a: assign(a))
 
-    # TODO: Fix 
+    # TODO: Fix
     def computeDelta(self, sortedRDD):
         """
         Compute the Delta for Order-Aware Local Update Step.
         The Delta represents the effect to each microcluster of adding the points in order to the mc they belong to.
-        
+
         At the end of the function we collect all the Deltas from the worker to the driver node for the global update step
         to be computed. The global update step actually applies the deltas/effects of insertion to the microcluters,
         preparing them for the next batch.
@@ -380,38 +450,58 @@ class DDStreamModel:
         """
         # print("In computeDelta")
         # print(f"computeDelta input = {sortedRDD.collect()}")
-        #TODO: How do we aggregate the Deltas once we .collect them? Since a different Delta has been computed at each node.
+        # TODO: How do we aggregate the Deltas once we .collect them? Since a different Delta has been computed at each node.
         def calcDelta(x):
             """
             :param x: list of points :(<timestamp>, list<feature values>)
             :output (delta_cf1x, delta_cf2x, delta_n, delta_t)
             """
-            #TODO: Give a proper definition of n. Basically n is used in weight where we +1 when we add a point
+            # TODO: Pass label in this function
+            # TODO: l must be int() so in KDD_99 we need to turn obj to int
+            lbl_counts = [0] * self.NUM_LABELS
+
+            # TODO: Give a proper definition of n. Basically n is used in weight where we +1 when we add a point
             # but because here we add eg. 3 poitns do n = (l1*1)+(l2*1)+(l3*1) < 3 (lambda affect of each point)
-            delta_cf1x, delta_cf2x, delta_n, delta_t = np.zeros(self.numDimensions), np.zeros(self.numDimensions), 0.0, 0
+            delta_cf1x, delta_cf2x, delta_n, delta_t, delta_pts = (
+                np.zeros(self.numDimensions),
+                np.zeros(self.numDimensions),
+                0.0,
+                0,
+                0,
+            )
             # with open('blah.txt','a+') as f:
             #         f.write(f"type = {type(x)}\t")
             #         f.write(f"x = {x}\n")
             # for each point in order apply decay and compute the delta "effect" to mc
-            for row in x:     
-                arrivalT, featVals = row[0], row[1]
+            for row in x:
+                arrivalT, featVals, lbl = row[0], row[1], row[2]
                 assert type(featVals) == type(delta_cf1x) == type(delta_cf1x)
                 lmbda = math.pow(2, -self.lmbda * (arrivalT - delta_t))
                 delta_cf1x = (delta_cf1x * lmbda) + featVals
-                delta_cf2x = (delta_cf1x * lmbda) + featVals * featVals 
+                delta_cf2x = (delta_cf1x * lmbda) + featVals * featVals
                 delta_n = (delta_n * lmbda) + 1
                 delta_t = max(arrivalT, delta_t)
-            return delta_cf1x, delta_cf2x, delta_n, delta_t
-        return sortedRDD.mapValues(lambda x: calcDelta(x)).collect()
+                # get total pts
+                delta_pts = delta_pts + 1
+                lbl_counts[lbl] = lbl_counts[lbl] + 1
+            # TODO: get label -> do this later mc.getLabel()
 
-        
+            # TODO: label = max(sum(cl1), ... , sum(cln))
+            # so I need to know the number of real clusters (n) and create a new counter for each
+            # each time we calcDelta
+            # TODO: We can get this if we pass label along with the training data?
+            # TODO: get correctPts
+
+            return delta_cf1x, delta_cf2x, delta_n, delta_t, delta_pts, lbl_counts
+
+        return sortedRDD.mapValues(lambda x: calcDelta(x)).collect()
 
     def updateMicroClusters(self, assignations):
         """
         Algorithm 1 modified. (Cao et al. and Xu et al.)
 
         Go over the current batch of points and :
-        1) Local Update Step: 
+        1) Local Update Step:
             - Assign batch points to closest primary micro cluster
             - Compute deltas (effect of each point with decay) to the respective primary micro cluster
             - Assign rest of batch points to closest outlier micro cluster
@@ -433,10 +523,9 @@ class DDStreamModel:
 
         # why persist: https://stackoverflow.com/questions/31002975/how-to-use-rdd-persist-and-cache
         assignations.persist()
-        
+
         # aa = assignations.collect()
         # print(f"{len(aa)} assignations: {aa}")
-
 
         # # for printing:
         # to_be_printed = assignations.collect()
@@ -462,139 +551,178 @@ class DDStreamModel:
         # for row in to_be_printed:
         #     print(f"pre_sortedRDD:  {str(row)}")
         # x.toList.sortBy(key=x[0])
-        sortedRDD = dataInPmic.groupByKey().mapValues(lambda x: sorted(list(x), key=lambda y : y[0]))
+        sortedRDD = dataInPmic.groupByKey().mapValues(
+            lambda x: sorted(list(x), key=lambda y: y[0])
+        )
         # to_be_printed = sortedRDD.collect()
         # for row in to_be_printed:
         #     print(f"sortedRDD:  {str(row)}")
 
-        # Step 3: 
+        # Step 3:
         dataInPmicSS = self.computeDelta(sortedRDD)
         # print(f"dataInPmicSS: {dataInPmicSS}")
-        
+
         # datapoints are data not assigned to pmic that might belong to outlier mc or are noise
         dataInAndOut = assignations.filter(lambda x: x[0] == -1).map(lambda x: x[1])
         # print(f"dataInAndOut: {dataInAndOut.collect()}")
-        
+
         # dataOut: data not assigned to primary microclusters that have not been assigned to outlier microcluster
         # or not assigned to any cluster -> index == -1
         dataOut = self.assignToOutlierCluster(dataInAndOut)
         # data in outlier microclusters
         # print(f"dataOut = {dataOut.collect()}")
         dataOut.persist()
-            
+
         dataInOmic = dataOut.filter(lambda x: x[0] != -1)
         # outliers : data not assigned to outlier microclusters -> complete outliers
         outliers = dataOut.filter(lambda x: x[0] == -1).map(lambda x: x[1])
         # group by omc id and sort by arrivel and compute delta
-        omicSortedRDD = dataInOmic.groupByKey().mapValues(lambda x: sorted(list(x), key=lambda y : y[0]))
+        omicSortedRDD = dataInOmic.groupByKey().mapValues(
+            lambda x: sorted(list(x), key=lambda y: y[0])
+        )
         dataInOmicSS = self.computeDelta(omicSortedRDD)
-            
+
         realOutliers = outliers.collect()
-        
+
+        # print(f"realOutliers = {realOutliers}")
         assignations.unpersist()
         dataOut.unpersist()
-        #TODO: What is this
+        # TODO: What is this
         DriverTime = time.time()
 
         ##### ---- Global Update Step
         # print("\t----Global Update Step:----")
         # print(f"dataInPmicSS= {dataInPmicSS}")
-        #TODO: Test exactly how deltas are applied, need to better understand effect.
+        # TODO: Test exactly how deltas are applied, need to better understand effect.
         if len(dataInPmicSS) > 0:
             for ss in dataInPmicSS:
-                i, delta_cf1x, delta_cf2x, n, ts = ss[0], ss[1][0], ss[1][1], ss[1][2], ss[1][3]
+                i, delta_cf1x, delta_cf2x, n, ts, delta_pts, lbl_counts = (
+                    ss[0],
+                    ss[1][0],
+                    ss[1][1],
+                    ss[1][2],
+                    ss[1][3],
+                    ss[1][4],
+                    ss[1][5],
+                )
+                # print(f"{i}) delta_pts = {delta_pts}", end='')
+                # print(f"\t lbl_counts = {lbl_counts}")
                 # print(f"i = {i}, time = {ts}")
                 # the max(ts) out of the microclusters becomes the self.lastEdit
                 if self.lastEdit < ts:
                     self.lastEdit = ts
-                #TODO: See if we can do this with .insert()
-                #TODO: Should we be manipulating the broadcastedObjects? or are we in driver node
+                # TODO: Call mc.calcLabel() -> calculates correctPts
+                # TODO: See if we can do this with .insert()
+                # TODO: Should we be manipulating the broadcastedObjects? or are we in driver node
                 #       so we can manipulate pMicroClusters?
                 self.pMicroClusters[i].setWeight(n, ts)
                 self.pMicroClusters[i].cf1x = self.pMicroClusters[i].cf1x + delta_cf1x
                 self.pMicroClusters[i].cf2x = self.pMicroClusters[i].cf2x + delta_cf2x
-        
+                # overwrite the past lbl_counts, delta_pts with only the current batch ones
+                # its a hassle to try and have window over previous ones + decay
+                # TODO: look into windowed option later ( same with outliers )
+                self.pMicroClusters[i].lbl_counts = lbl_counts
+                self.pMicroClusters[i].pts = delta_pts
 
-        #TODO: TEST
+        # TODO: TEST
         upgradeToPMIC = []
         if len(dataInOmicSS) > 0:
             # print(f"Number of updated o-micro-clusters = {len(dataInOmicSS)}")
             # detectList = []
             for oo in dataInOmicSS:
-                i, delta_cf1x, delta_cf2x, n, ts = oo[0], oo[1][0], oo[1][1], oo[1][2], oo[1][3]
+                i, delta_cf1x, delta_cf2x, n, ts, delta_pts, lbl_counts = (
+                    oo[0],
+                    oo[1][0],
+                    oo[1][1],
+                    oo[1][2],
+                    oo[1][3],
+                    oo[1][4],
+                    oo[1][5],
+                )
                 # detectList.insert(0, i)
                 if self.lastEdit < ts:
                     self.lastEdit = ts
-                #TODO: See if we can do this with .insert()
+                # TODO: See if we can do this with .insert()
                 self.oMicroClusters[i].setWeight(n, ts)
                 self.oMicroClusters[i].cf1x = self.oMicroClusters[i].cf1x + delta_cf1x
                 self.oMicroClusters[i].cf2x = self.oMicroClusters[i].cf2x + delta_cf2x
-                w = self.oMicroClusters[i].weight
+                self.oMicroClusters[i].lbl_counts = lbl_counts
+                self.oMicroClusters[i].pts = delta_pts
                 # print("\nfor o-mc")
                 # print(f"self.beta * self.mu = {self.beta} * {self.mu} = {self.beta * self.mu}")
                 # print(f"w = {w}")
-                if w  >= self.beta * self.mu:
+                if self.oMicroClusters[i].weight >= self.beta * self.mu:
                     upgradeToPMIC.append(i)
 
-        #TODO: TEST CODE
-        # tyoe(realOutliers) == list() 
+        # TODO: TEST CODE
+        # TODO: Handle .lbl_counts etc. in code below where we create new microcluster
+        # tyoe(realOutliers) == list()
         if len(realOutliers) > 0:
             # print(f"Number of realOutliers =  {len(realOutliers)}")
             # print(f"realOutliers =  {realOutliers}")
-            
-            #TODO: Is this needed?
+
+            # TODO: Is this needed?
             # if len(realOutliers) > 35_000:
             #     realOutliers = realOutliers.sortByKey().collect()
             if len(realOutliers) < 50_000:
-                realOutliers = sorted(realOutliers, key = lambda x : x[0])
-            if self.lastEdit < realOutliers[len(realOutliers)-1][0]:
-                self.lastEdit = realOutliers[len(realOutliers)-1][0]
+                realOutliers = sorted(realOutliers, key=lambda x: x[0])
+            if self.lastEdit < realOutliers[len(realOutliers) - 1][0]:
+                self.lastEdit = realOutliers[len(realOutliers) - 1][0]
             # newMCs -> keep track of newly created micro clusters
             j, newMCs = 0, []
             for point in realOutliers:
-                ts, point_vals = point[0], point[1]
+                ts, point_vals, point_labl = point[0], point[1], point[2]
+                # print(f"ts {ts},point_vals {point_vals}, label {point_labl}")
                 minDist, idMinDist, merged = float("inf"), 0, 0
-                #TODO: What is recursiveOutliersRMSDCheck -> redundant?
-                #TODO: Check if we can create oMicroClusters in InitDBSCAn rather than at this point (maybe start out with some oMicroClusters....)
-                if len(self.oMicroClusters) > 0 and self.recursiveOutliersRMSDCheck == 1:
+                # TODO: What is recursiveOutliersRMSDCheck -> redundant?
+                # TODO: Check if we can create oMicroClusters in InitDBSCAn rather than at this point (maybe start out with some oMicroClusters....)
+                if (
+                    len(self.oMicroClusters) > 0
+                    and self.recursiveOutliersRMSDCheck == 1
+                ):
                     # if we created a newMC on a previous point of the realOutliers (try to insert)
                     if len(newMCs) > 0:
                         for i in newMCs:
-                            dist = np.linalg.norm(self.oMicroClusters[i].getCentroid() - point[1])
+                            dist = np.linalg.norm(
+                                self.oMicroClusters[i].getCentroid() - point[1]
+                            )
                             if dist < minDist:
                                 minDist, idMinDist = dist, i
                     # print(f"(realOloop) oMicroClusters == {self.oMicroClusters}")
                     # print(f"(realOloop) oMicroClusters[{idMinDist}] == {self.oMicroClusters[idMinDist]}")
                     ocopy = copy.deepcopy(self.oMicroClusters[idMinDist])
-                    #TODO: Test correctness
-                    ocopy.insertAtT(point=point_vals, time=ts, n=1)
+                    # TODO: Test correctness
+                    ocopy.insertAtT(point=point_vals, time=ts, n=1, label=point_labl)
                     if ocopy.getRMSD() <= self.epsilon:
-                        self.oMicroClusters[idMinDist].insert(point, 1.0)
+                        # TODO: create lbl
+                        self.oMicroClusters[idMinDist].insert(
+                            point, 1, label=point_labl
+                        )
                         merged = 1
                         j += 1
                 # Creation of outlier micro clusters
                 if merged == 0:
-                    #TODO: Fix
+                    # TODO: Fix
                     newOmic = CoreMicroCluster(
-                        cf2x = point_vals * point_vals,
-                        cf1x = point_vals,
-                        weight = 1.0,
-                        t0 = ts,
-                        lastEdit = ts,
-                        lmbda = self.lmbda,
-                        tfactor = self.tfactor,
+                        cf2x=point_vals * point_vals,
+                        cf1x=point_vals,
+                        weight=1.0,
+                        t0=ts,
+                        lastEdit=ts,
+                        lmbda=self.lmbda,
+                        num_labels=self.NUM_LABELS,
+                        label=point_labl,
                     )
                     self.oMicroClusters.append(newOmic)
-                    newMCs.append(len(self.oMicroClusters)-1)
+                    newMCs.append(len(self.oMicroClusters) - 1)
             # print(f"The number of newly generated microclusters: {len(newMCs)}")
             # print(f"Merged outliers: {j}")
             if self.recursiveOutliersRMSDCheck == 1:
                 for k in newMCs:
-                    w = self.oMicroClusters[k].weight
                     # print("\nfor o-mc new")
                     # print(f"self.beta * self.mu = {self.beta} * {self.mu} = {self.beta * self.mu}")
                     # print(f"w = {w}")
-                    if w >= self.beta * self.mu:
+                    if self.oMicroClusters[k].weight >= self.beta * self.mu:
                         upgradeToPMIC.append(k)
                         # print(f"upgradeToPMIC = {upgradeToPMIC}")
 
@@ -616,8 +744,6 @@ class DDStreamModel:
         DriverTime = time.time() - DriverTime
         self.AlldriverTime += DriverTime
         # print(f" Driver completed... driver time taken (ms) = {DriverTime}")
-
-
 
     def ModelDetect(self):
         """
@@ -642,14 +768,14 @@ class DDStreamModel:
                 # print(f"pMicroClusters = {self.pMicroClusters}")
                 # print(f"len(pmc) = {len(self.pMicroClusters)}")
                 del self.pMicroClusters[i]
-        
+
         # Time for outlier microcluster deletion (slightly different)
         to_be_deleted = []
         if len(self.oMicroClusters) > 0:
             for idx, mc in enumerate(self.oMicroClusters):
-                nomin = math.pow(2, -self.lmbda * (self.lastEdit - mc.t0 + self.Tp)) 
+                nomin = math.pow(2, -self.lmbda * (self.lastEdit - mc.t0 + self.Tp))
                 denom = math.pow(2, -self.lmbda * self.Tp) - 1
-                uthres =  nomin / denom
+                uthres = nomin / denom
                 if mc.getWeightAtT(self.lastEdit) < uthres:
                     to_be_deleted.append(idx)
 
@@ -659,8 +785,7 @@ class DDStreamModel:
             for i in sorted(to_be_deleted, reverse=True):
                 del self.oMicroClusters[i]
 
-
     def FinalDetect(self):
-        #TODO: What is this?
+        # TODO: What is this?
         self.time = self.time - self.batchTime
         self.ModelDetect()
