@@ -353,9 +353,6 @@ class DDStreamModel:
             avg_purity = self.calcAvgPurity(self.broadcastPMic.value)
             append_to_MICRO_METRICS(batch_id=self.batch_id, name="PURITY(avg)", value=avg_purity)
 
-
-
-
     def assignToMicroCluster(self, rdd):
         """
         Assign each point in the batch to a pMicroCluster.

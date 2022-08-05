@@ -335,7 +335,6 @@ if __name__ == "__main__":
     ssc.sparkContext.addPyFile("ddstream/offline.py")
     ssc.sparkContext.addPyFile("ddstream/utils.py")
 
-
     # Streaming Query
     # TODO: Maybe using StreamingListener is a must (I need it to print some results )
     # https://spark.apache.org/docs/2.2.0/api/python/pyspark.streaming.html

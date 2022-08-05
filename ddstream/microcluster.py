@@ -17,7 +17,12 @@ class CoreMicroCluster:
         t0,
         lastEdit,
         lmbda,
+<<<<<<< HEAD
         num_labels,
+=======
+        tfactor=1.0,
+        num_labels=3,
+>>>>>>> 4c032b1e5d28b9b56a972c50f681d1b22bd532bc
         label=None,
     ):
         """
@@ -29,6 +34,10 @@ class CoreMicroCluster:
         :param t0       = timestamp of CoreMicroCluster creation
         :param lastEdit = last time an edit (weight, cf1, cf2 recalculation) happened
         :param lmbda    =
+<<<<<<< HEAD
+=======
+        :param tfactor  =
+>>>>>>> 4c032b1e5d28b9b56a972c50f681d1b22bd532bc
         :param num_labels = number of unique clusters/labels in dataset (defalut 3)
         """
         self.cf2x = cf2x
@@ -37,6 +46,10 @@ class CoreMicroCluster:
         self.t0 = t0
         self.lastEdit = lastEdit
         self.lmbda = lmbda
+<<<<<<< HEAD
+=======
+        self.tfactor = tfactor
+>>>>>>> 4c032b1e5d28b9b56a972c50f681d1b22bd532bc
         # During initialization only 1 point in mc so :
         self.pts = 1
         self.num_labels = num_labels
