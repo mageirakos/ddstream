@@ -87,13 +87,8 @@ class DDStreamModel:
             lines = f.readlines()
             for i, line in enumerate(lines):
                 tmp = line.split(",")
-                # print(f"adding {tmp} to initArr")
-                # assume label at end (either int or str/obj)
-                # TODO: If label is string turn to int
-                try:
-                    self.initLabels.append(int(tmp[-1]))
-                except:
-                    self.initLabels.append(str(tmp[-1]))
+                # expecting int label
+                self.initLabels.append(int(tmp[-1]))
                 self.initArr = np.append(
                     self.initArr, np.asarray(list(map(lambda x: float(x), tmp[:-1])))
                 )

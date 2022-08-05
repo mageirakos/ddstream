@@ -23,7 +23,6 @@ def parse_args():
     required = parser.add_argument_group("required arguments")
     optional = parser.add_argument_group("optional arguments")
 
-    # TODO: For all arguments understand what they are and where they are used
     optional.add_argument(
         "--batchTime",
         default="5",
@@ -43,9 +42,9 @@ def parse_args():
     #TODO: Fix not correct ( unless I specify it each time )
     required.add_argument(
         "--speedRate",
-        default="1000",
+        default="100",
         type=int,
-        help="Speed Rate input (default 1000)",
+        help="Speed Rate input (default 100)",
     )
     required.add_argument(
         "--numLabels",
@@ -92,12 +91,7 @@ def parse_args():
         type=float,
         help="beta (default 0.2)",
     )
-    # optional.add_argument(
-    #     "--tfactor",
-    #     default="1.0",
-    #     type=float,
-    #     help="tfactor (default 1.0)",
-    # )
+
     required.add_argument(
         "--initialDataPath",
         help="Initial data path",
@@ -115,39 +109,12 @@ def parse_args():
         type=int,
         help="Training data amount (default 10_000)",
     )
-    # # TODO: What?
-    # optional.add_argument(
-    #     "--osTr",
-    #     default="",
-    #     help="osTr (default '')",
-    # )
-    # # TODO: What?
-    # optional.add_argument(
-    #     "--k",
-    #     default="5",
-    #     type=int,
-    #     help="k (default 5)",
-    # )
-    # # TODO: What?
-    # optional.add_argument(
-    #     "--cmDataPath",
-    #     default="/",
-    #     help="cmDataPath (default '/')",
-    # )
     optional.add_argument(
         "--offlineMu",
         default="10",
         type=float,
         help="Offline mu (default 10)",
     )
-    # # TODO: what?
-    # optional.add_argument(
-    #     "--check",
-    #     default="1",
-    #     type=int,
-    #     help="check  (default 1)",
-    # )
-    # dataset
     optional.add_argument(
         "-d",
         "--dataset",
@@ -159,20 +126,18 @@ def parse_args():
         default="./data/toy_dataset.csv",
         help="Dataset input (default './data/toy_dataset.csv')",
     )
-    # trainingTopic
     optional.add_argument(
         "--topic",
         default="test",
         help="Kafka topic (default 'test')",
     )
     # timeout
-    #TODO: Set TIMEOUT based on rate of speed and batch time...
     optional.add_argument(
         "-t",
         "--timeout",
-        default=10,
+        default=10000001,
         type=int,
-        help="Timeout of streaming application (default 10 seconds)",
+        help="Timeout of streaming application (default 10000001 seconds)",
     )
     required.add_argument(
         "--save",
@@ -193,15 +158,10 @@ def parse_args():
     initialEpsilon = args.initialEpsilon
     mu = args.mu
     beta = args.beta
-    # tfactor = args.tfactor
     initialDataPath = args.initialDataPath
     offlineEpsilon = args.offlineEpsilon
     trainingDataAmount = args.trainingDataAmount
-    # osTr = args.osTr
-    # k = args.k
-    # cmDataPath = args.cmDataPath
     offlineMu = args.offlineMu
-    # check = args.check
     dataset = args.dataset
     streamPath = args.streamPath
     trainingTopic = args.topic
@@ -219,15 +179,10 @@ def parse_args():
         initialEpsilon,
         mu,
         beta,
-        # tfactor,
         initialDataPath,
         offlineEpsilon,
         trainingDataAmount,
-        # osTr,
-        # k,
-        # cmDataPath,
         offlineMu,
-        # check,
         dataset,
         streamPath,
         trainingTopic,
@@ -238,16 +193,8 @@ def parse_args():
 
 # TODO: Might need to change again into numpy array instead of typical "Vector"
 # or do it later when calling DBSCAN from sklearn? http://blog.madhukaraphatak.com/spark-vector-to-numpy/
-def split_data(streaming_df, database="nsl-kdd"):
-    # print("STEP 0: In split_data")
+def split_data(streaming_df, num_feats):
     """Change the input stream to be (label, Vector<features>)"""
-    # TODO: This can be take from numDimensions
-    if database == "nsl-kdd":
-        num_feats = 33
-    elif database == "test":
-        num_feats = 5
-    elif database in ["init_toy", "toy"]:
-        num_feats = 2
 
     def get_features(arr):
         """
@@ -256,7 +203,6 @@ def split_data(streaming_df, database="nsl-kdd"):
         features : first n-1 columns of the array
         label    : last column in the aray
         """
-        # print("STEP 1: In get_features")
         res = []
         for i in range(len(arr) - 1):
             res.append(float(arr[i]))
@@ -271,14 +217,9 @@ def split_data(streaming_df, database="nsl-kdd"):
         split(streaming_df["value"], "/").alias("ts-vals"),
     )
 
-    # split_df = split_df.select(
-    # split(split_df["ts-vals"].getItem(1), ",").alias("full_input_array"),
-    # )
-    # print(f"SPLIT_DF:{split_df}")
     split_df = split_df.withColumn("time", split_df["ts-vals"].getItem(0)).withColumn(
         "label_feats", split_df["ts-vals"].getItem(1)
     )
-
     split_df = split_df.select(
         split_df["key"].cast("Long"),
         split_df["time"].cast("Long"),
@@ -287,7 +228,6 @@ def split_data(streaming_df, database="nsl-kdd"):
     result = split_df.withColumn(
         "label", split_df["full_input_array"].getItem(num_feats).cast("Int")
     ).withColumn("features", dense_features(split_df["full_input_array"]))
-    print("STEP 2: Leaving split_data")
     return result
 
 
@@ -355,7 +295,7 @@ if __name__ == "__main__":
     print("\n")
 
     # database options : [ 'test', 'nsl-kdd', 'toy', 'init_toy']
-    data = split_data(input_df1, database=DATASET_NAME)
+    data = split_data(input_df1, num_feats=NUM_DIMENSIONS)
     # # For testing:
     # training_data = data.select("time", "features")
     # random_stream = (
@@ -372,16 +312,19 @@ if __name__ == "__main__":
 
     # 10 sec to have time to start the data stream
     #TODO: have the args one overwrite this one instead of the opposite
-    TIMEOUT = 10 + (STREAM_DATA_AMOUNT / (BATCH_TIME * STREAM_SPEED) ) * BATCH_TIME
+    if TIMEOUT == 10000001:
+        TIMEOUT = 10 + (STREAM_DATA_AMOUNT / (BATCH_TIME * STREAM_SPEED) ) * BATCH_TIME
+    else:
+        pass
     #TODO: Change dataset name earlier at start
-    DATASET_NAME = STREAM_DATA_PATH.split('/')[-1].split('.')[0]
-    
+    temp = STREAM_DATA_PATH.split('/')[-1].split('.')[0]
+    assert temp == DATASET_NAME
     assert TIMEOUT == 10 + ( STREAM_DATA_AMOUNT / (BATCH_TIME * STREAM_SPEED) )* BATCH_TIME
     assert INITIAL_EPSILON == 0.4
     assert LAMBDA == 0.25 
     assert BETA == 0.2
     assert MU == 10
-    assert NUM_LABELS == 3
+    # assert NUM_LABELS == 3
     
     model = DDStreamModel(
         numDimensions=NUM_DIMENSIONS,
@@ -401,6 +344,7 @@ if __name__ == "__main__":
     # Step 2. Start Training Stream
     training_data = data.select("time", "features", "label")
     print("\nSTART ONLINE PHASE with:")
+    print(f"DATASET : {DATASET_NAME}")
     print(f"TOTAL_DATA : {STREAM_DATA_AMOUNT} data")
     print(f"BATCH_TIME : {BATCH_TIME} sec")
     print(f"STREAM SPEED : {STREAM_SPEED} data per sec")

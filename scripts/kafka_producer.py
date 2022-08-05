@@ -20,7 +20,7 @@ def generate_stream():
         try:
             stream = next(reader)
         except StopIteration:
-            reader = file_reader(dataset)
+            reader = file_reader(dataset_source)
             stream = next(reader)
         
         #TODO: Key is not correct -> key == total_processed only if rate = 1
@@ -30,7 +30,7 @@ def generate_stream():
         
         producer.send(topic, value=bytes(str(time) + "/" + stream, encoding="utf8"))
         # 
-        print(f"{time}) '{dataset.split('/')[-1]}' to topic '{topic}', #{total_processed}")
+        print(f"{time}) '{dataset_source.split('/')[-1]}' to topic '{topic}', #{total_processed}")
 
         total_current_interval += 1
         total_processed += 1
@@ -97,13 +97,13 @@ def parse_args():
     )
 
     args = parser.parse_args()
-    dataset = DB_SOURCE[args.source]
+    dataset_source = args.source
     rate = args.rate
     time_interval = args.interval
     total_data = args.total_data
     num_partitions = args.partitions
     topic = args.topic
-    return dataset, rate, time_interval, total_data, num_partitions, topic
+    return dataset_source, rate, time_interval, total_data, num_partitions, topic
 
 
 if __name__ == "__main__":
@@ -119,9 +119,9 @@ if __name__ == "__main__":
         "init_toy": DATA_PATH + "init_toy_dataset.csv",
     }
 
-    dataset, rate, time_interval, total_data, num_partitions, topic = parse_args()
+    dataset_source, rate, time_interval, total_data, num_partitions, topic = parse_args()
 
-    reader = file_reader(dataset)
+    reader = file_reader(dataset_source)
     try:
         producer = KafkaProducer(bootstrap_servers="localhost:9092") # may need different server
     except:
