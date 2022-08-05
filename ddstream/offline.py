@@ -27,11 +27,7 @@ class MacroCluster:
         lbl = self.getLabel()
         self.purity = self.correctPts / self.lbl_counts[lbl]
         return self.purity
-<<<<<<< HEAD
      #TODO: Fix this is not correct
-=======
-
->>>>>>> 4c032b1e5d28b9b56a972c50f681d1b22bd532bc
     def getLabel(self):
         self.correctPts = max(self.lbl_counts)
         self.label = self.lbl_counts.index(self.correctPts)
