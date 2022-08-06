@@ -39,7 +39,7 @@ def parse_args():
         type=int,
         help="Number of dimensions",
     )
-    #TODO: Fix not correct ( unless I specify it each time )
+    # TODO: Fix not correct ( unless I specify it each time )
     required.add_argument(
         "--speedRate",
         default="100",
@@ -52,7 +52,7 @@ def parse_args():
         help="Number of distinct Labels",
     )
     # The number of initialData should be the same as the flow rate
-    #TODO: Fix not correct
+    # TODO: Fix not correct
     required.add_argument(
         "--initialDataAmount",
         default="150",
@@ -311,21 +311,21 @@ if __name__ == "__main__":
     # exit()
 
     # 10 sec to have time to start the data stream
-    #TODO: have the args one overwrite this one instead of the opposite
+    # TODO: have the args one overwrite this one instead of the opposite
     if TIMEOUT == 10000001:
-        TIMEOUT = 10 + (STREAM_DATA_AMOUNT / (BATCH_TIME * STREAM_SPEED) ) * BATCH_TIME
+        TIMEOUT = 10 + (STREAM_DATA_AMOUNT / (BATCH_TIME * STREAM_SPEED)) * BATCH_TIME
     else:
         pass
-    #TODO: Change dataset name earlier at start
-    temp = STREAM_DATA_PATH.split('/')[-1].split('.')[0]
+    # TODO: Change dataset name earlier at start
+    temp = STREAM_DATA_PATH.split("/")[-1].split(".")[0]
     assert temp == DATASET_NAME
-    assert TIMEOUT == 10 + ( STREAM_DATA_AMOUNT / (BATCH_TIME * STREAM_SPEED) )* BATCH_TIME
+    # assert TIMEOUT == 10 + ( STREAM_DATA_AMOUNT / (BATCH_TIME * STREAM_SPEED) )* BATCH_TIME
     assert INITIAL_EPSILON == 0.4
-    assert LAMBDA == 0.25 
+    assert LAMBDA == 0.25
     assert BETA == 0.2
     assert MU == 10
     # assert NUM_LABELS == 3
-    
+
     model = DDStreamModel(
         numDimensions=NUM_DIMENSIONS,
         batchTime=BATCH_TIME,
@@ -333,8 +333,9 @@ if __name__ == "__main__":
         beta=BETA,
         mu=MU,
         lmbda=LAMBDA,
-        num_labels = NUM_LABELS,
-        Tp=4)
+        num_labels=NUM_LABELS,
+        Tp=4,
+    )
 
     assert model.Tp == 4
 
@@ -388,7 +389,7 @@ if __name__ == "__main__":
     avg_purity = model.calcAvgPurity(coreMicroClusters)
     print(f"AVERAGE PURITY (micro clusters) = {avg_purity}")
 
-    assert OFFLINE_EPSILON ==  0.4
+    assert OFFLINE_EPSILON == 0.4
     assert OFFLINE_MU == 10
     offline_model = DDStreamOfflineModel(epsilon=OFFLINE_EPSILON, mu=OFFLINE_MU)
     print()
@@ -401,20 +402,19 @@ if __name__ == "__main__":
         print(f"Macro cluster cf2x = {mc.cf2x}")
         print(f"Macro cluster center = {mc.getCentroid()}")
         print(f"Macro cluster purity = {mc.calcPurity()}")
-    #TODO: Fix bellow since (must not be same as microclusters)
+    # TODO: Fix bellow since (must not be same as microclusters)
     avg_purity = offline_model.calcAvgPurity(coreMacroClusters)
     print(f"AVERAGE PURITY (macro clusters) = {avg_purity}")
-
 
     # TODO NOW: Save MACRO_CLUSTERS, DETAILS, MACRO_METRICS
     append_to_DETAILS(
         appName=APP_NAME,
-        dataset=DATASET_NAME, # can probably just get it from STREAM_DATA_PATH
-        dataset_location=STREAM_DATA_PATH, #probably not needed at all unless I start kafka from here
+        dataset=DATASET_NAME,  # can probably just get it from STREAM_DATA_PATH
+        dataset_location=STREAM_DATA_PATH,  # probably not needed at all unless I start kafka from here
         num_of_labels=NUM_LABELS,
         data_amount=STREAM_DATA_AMOUNT,
         init_data_location=INITIAL_DATA_PATH,
-        init_data_amount=INITIAL_DATA_AMOUNT, #TODO: Fix not correct (should have assertion with Kafka)
+        init_data_amount=INITIAL_DATA_AMOUNT,  # TODO: Fix not correct (should have assertion with Kafka)
         num_of_features=NUM_DIMENSIONS,
         stream_speed_per_sec=STREAM_SPEED,
         batch_time=BATCH_TIME,
@@ -428,13 +428,13 @@ if __name__ == "__main__":
         offline_epsilon=OFFLINE_EPSILON,
     )
 
-    #TODO: Fix assertion
+    # TODO: Fix assertion
     # assert total_batches == INITIAL_DATA_AMOUNT / (STREAM_SPEED * BATCH_TIME)
 
     for i, macrocl in enumerate(coreMacroClusters):
         append_to_MACRO_CLUSTERS(
             microcluster_id=id(macrocl),
-            total_batches=None,#TODO: Fix this & assertion above
+            total_batches=None,  # TODO: Fix this & assertion above
             centroid=macrocl.getCentroid().tolist(),
             cf1x=macrocl.cf1x.tolist(),
             cf2x=macrocl.cf2x.tolist(),
@@ -442,15 +442,16 @@ if __name__ == "__main__":
             pts=macrocl.pts,
             lbl_counts=macrocl.lbl_counts,
             correctPts=macrocl.correctPts,
-            label=macrocl.getLabel(), #TODO: Fix this is not correct
-            purity=macrocl.calcPurity() #TODO: Fix this is not correct
-            )
-    
+            label=macrocl.getLabel(),  # TODO: Fix this is not correct
+            purity=macrocl.calcPurity(),  # TODO: Fix this is not correct
+        )
+
     avg_purity = offline_model.calcAvgPurity(coreMacroClusters)
     append_to_MACRO_METRICS(name="PURITY(avg)", value=avg_purity)
 
-    from pprint import pprint            
-    # TODO NOW: Write everything 
+    from pprint import pprint
+
+    # TODO NOW: Write everything
     print(f"Writing to file:")
     print(f"DETAILS")
     pprint(DETAILS)
@@ -465,7 +466,7 @@ if __name__ == "__main__":
 
     if SAVE:
         EXPERIMENT_DATA_PATH = f"/data/experiments/{DATASET_NAME}_{STREAM_SPEED}/"
-        
+
         try:
             os.mkdir("/data/experiments/")
         except FileExistsError:
@@ -476,18 +477,18 @@ if __name__ == "__main__":
             pass
 
         print(f"Saving experiments in '{EXPERIMENT_DATA_PATH}'")
-        with open(EXPERIMENT_DATA_PATH+f'DETAILS.pkl', 'wb') as f:
+        with open(EXPERIMENT_DATA_PATH + f"DETAILS.pkl", "wb") as f:
             pickle.dump(DETAILS, f)
-        with open(EXPERIMENT_DATA_PATH+f'MICRO_CLUSTERS.pkl', 'wb') as f:
+        with open(EXPERIMENT_DATA_PATH + f"MICRO_CLUSTERS.pkl", "wb") as f:
             pickle.dump(MICRO_CLUSTERS, f)
-        with open(EXPERIMENT_DATA_PATH+f'MICRO_METRICS.pkl', 'wb') as f:
+        with open(EXPERIMENT_DATA_PATH + f"MICRO_METRICS.pkl", "wb") as f:
             pickle.dump(MICRO_METRICS, f)
-        with open(EXPERIMENT_DATA_PATH+f'MACRO_CLUSTERS.pkl', 'wb') as f:
+        with open(EXPERIMENT_DATA_PATH + f"MACRO_CLUSTERS.pkl", "wb") as f:
             pickle.dump(MACRO_CLUSTERS, f)
-        with open(EXPERIMENT_DATA_PATH+f'MACRO_METRICS.pkl', 'wb') as f:
+        with open(EXPERIMENT_DATA_PATH + f"MACRO_METRICS.pkl", "wb") as f:
             pickle.dump(MACRO_METRICS, f)
     else:
-        print('not saving experiments')
-    # # to load 
+        print("not saving experiments")
+    # # to load
     # with open('saved_dictionary.pkl', 'rb') as f:
-    # loaded_dict = 
+    # loaded_dict =

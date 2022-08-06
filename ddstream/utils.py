@@ -5,68 +5,69 @@ KAFKA_BOOTSTRAP_SERVERS = "kafka:29092"  # when run from container
 global DETAILS, MACRO_METRICS, MICRO_METRICS, MICRO_CLUSTERS, MACRO_CLUSTERS
 
 DETAILS = {
-    'appName' : [],
-    'dataset': [],
-    'dataset location': [],
-    'num of labels': [],
-    'data amount': [],
-    'init data location': [],
-    'init data amount': [],
+    "appName": [],
+    "dataset": [],
+    "dataset location": [],
+    "num of labels": [],
+    "data amount": [],
+    "init data location": [],
+    "init data amount": [],
     # data hyperparameters
-    'num of features': [],
-    'stream speed per sec': [],
-    'batch time': [],
+    "num of features": [],
+    "stream speed per sec": [],
+    "batch time": [],
     # model hyperparameters
-    'init epsilon': [],
-    'init mu': [],
-    'lambda': [],
-    'mu': [],
-    'beta': [],
-    'epsilon': [],
-    'offline mu': [],
-    'offline epsilon': [],
+    "init epsilon": [],
+    "init mu": [],
+    "lambda": [],
+    "mu": [],
+    "beta": [],
+    "epsilon": [],
+    "offline mu": [],
+    "offline epsilon": [],
 }
 
 MACRO_METRICS = {
-    'name': [],
-    'value': [],
+    "name": [],
+    "value": [],
 }
 
 MICRO_METRICS = {
-    'batch id': [],
-    'name': [],
-    'value': [],
+    "batch id": [],
+    "name": [],
+    "value": [],
 }
 
 MICRO_CLUSTERS = {
-    'batch id': [],
-    'microcluster id': [],
-    'centroid': [],
-    'cf1x': [],
-    'cf2x': [],
-    'weight': [],
-    't0': [], # microcluster creation time
-    'lastEdit': [],
-    'pts': [],
-    'lbl counts': [], # make it a string or something
-    'correctPts': [],
-    'label': [],
-    'purity': [],
+    "batch id": [],
+    "microcluster id": [],
+    "centroid": [],
+    "cf1x": [],
+    "cf2x": [],
+    "weight": [],
+    "t0": [],  # microcluster creation time
+    "lastEdit": [],
+    "pts": [],
+    "lbl counts": [],  # make it a string or something
+    "correctPts": [],
+    "label": [],
+    "purity": [],
 }
 
 MACRO_CLUSTERS = {
-    'microcluster id': [],
-    'total batches': [],
-    'centroid': [],
-    'cf1x': [],
-    'cf2x': [],
-    'weight': [],
-    'pts': [],
-    'lbl counts': [], # make it a string or something
-    'correctPts': [],
-    'label': [],
-    'purity': [],
+    "microcluster id": [],
+    "total batches": [],
+    "centroid": [],
+    "cf1x": [],
+    "cf2x": [],
+    "weight": [],
+    "pts": [],
+    "lbl counts": [],  # make it a string or something
+    "correctPts": [],
+    "label": [],
+    "purity": [],
 }
+
 
 def append_to_DETAILS(
     appName,
@@ -109,11 +110,13 @@ def append_to_DETAILS(
     DETAILS["offline epsilon"].append(offline_epsilon)
     return True
 
+
 def append_to_MACRO_METRICS(name, value):
     global MACRO_METRICS
     MACRO_METRICS["name"].append(name)
     MACRO_METRICS["value"].append(value)
     return True
+
 
 def append_to_MICRO_METRICS(batch_id, name, value):
     global MICRO_METRICS

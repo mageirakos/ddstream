@@ -63,7 +63,7 @@ class DDStreamModel:
         self.AllprocessTime = 0.0
 
     def getMicroClusters(self):
-        #TODO: what to return here?
+        # TODO: what to return here?
         print(f"\tin getMicroClusters")
         print(f"self.pMicroClusters = {self.pMicroClusters}\n")
         print(f"self.broadcastPMic = {self.broadcastPMic.value}\n")
@@ -283,7 +283,7 @@ class DDStreamModel:
             self.broadcastPMic = rdd.context.broadcast(
                 list(zip(self.pMicroClusters, range(len(self.pMicroClusters))))
             )
-            
+
             self.broadcastOMic = rdd.context.broadcast(
                 list(zip(self.oMicroClusters, range(len(self.oMicroClusters))))
             )
@@ -307,18 +307,26 @@ class DDStreamModel:
             # ------------------ STATUS PRINTS ---------------------
             # primary
             print("Primary mc:")
-            print(f"After batch {batch_id} number of p microclusters: {len(self.broadcastPMic.value)}")
+            print(
+                f"After batch {batch_id} number of p microclusters: {len(self.broadcastPMic.value)}"
+            )
             for i, mc in enumerate(self.broadcastPMic.value):
-                print(f"pmic_{i} last_t={mc[0].lastEdit} w = {mc[0].weight} center = {mc[0].getCentroid()} lbl_counts = {mc[0].lbl_counts} pts = {mc[0].pts} label = {mc[0].getLabel()} correctPts = {mc[0].correctPts} purity = {mc[0].calcPurity()}")
+                print(
+                    f"pmic_{i} last_t={mc[0].lastEdit} w = {mc[0].weight} center = {mc[0].getCentroid()} lbl_counts = {mc[0].lbl_counts} pts = {mc[0].pts} label = {mc[0].getLabel()} correctPts = {mc[0].correctPts} purity = {mc[0].calcPurity()}"
+                )
             # primary purity
             pmic_avg_purity = self.calcAvgPurity(self.broadcastPMic.value)
-            print(f"After batch {batch_id} number of p microclusters: {len(self.broadcastPMic.value)}")
+            print(
+                f"After batch {batch_id} number of p microclusters: {len(self.broadcastPMic.value)}"
+            )
             print(f"AVERAGE PURITY (pmic) = {pmic_avg_purity}")
             # outlier
             print(f"Outlier mc :")
             for i, mc in enumerate(self.broadcastOMic.value):
-                print(f"omic_{i} last_t={mc[0].lastEdit} w ={mc[0].weight} center = {mc[0].getCentroid()} lbl_counts = {mc[0].lbl_counts} pts = {mc[0].pts} label = {mc[0].getLabel()} correctPts = {mc[0].correctPts} purity = {mc[0].calcPurity()}")
-            
+                print(
+                    f"omic_{i} last_t={mc[0].lastEdit} w ={mc[0].weight} center = {mc[0].getCentroid()} lbl_counts = {mc[0].lbl_counts} pts = {mc[0].pts} label = {mc[0].getLabel()} correctPts = {mc[0].correctPts} purity = {mc[0].calcPurity()}"
+                )
+
             # print(f"batch_{batch_id} OutlierMC ({batch_id}) = {self.oMicroClusters} \n {self.oMicroClusters.value}")
             # omic_avg_purity = self.calcAvgPurity(self.broadcastOMic.value)
             # print(
@@ -327,7 +335,7 @@ class DDStreamModel:
             # print(f"AVERAGE PURITY (omic) = {omic_avg_purity}")
             # ------------------ EXPERIMENT DATA ---------------------
             # TODO NOW: Save MICRO_CLUSTERS, MICRO_METRICS '/data/experiments/<dataset_d>
-            
+
             for i, mc in enumerate(self.broadcastPMic.value):
                 microcl, _ = mc[0], mc[1]
                 append_to_MICRO_CLUSTERS(
@@ -343,10 +351,13 @@ class DDStreamModel:
                     lbl_counts=microcl.lbl_counts,
                     correctPts=microcl.correctPts,
                     label=microcl.getLabel(),
-                    purity=microcl.calcPurity())
+                    purity=microcl.calcPurity(),
+                )
             # append avg purity from above microclusters in current batch
             avg_purity = self.calcAvgPurity(self.broadcastPMic.value)
-            append_to_MICRO_METRICS(batch_id=self.batch_id, name="PURITY(avg)", value=avg_purity)
+            append_to_MICRO_METRICS(
+                batch_id=self.batch_id, name="PURITY(avg)", value=avg_purity
+            )
 
     def assignToMicroCluster(self, rdd):
         """
@@ -475,16 +486,19 @@ class DDStreamModel:
                 delta_t = max(arrivalT, delta_t)
                 # get total pts
                 delta_pts = delta_pts + 1
+                # TODO: Sometimes (can't always recreate) I get index error here, why?
                 lbl_counts[lbl] = lbl_counts[lbl] + 1
-            # TODO: get label -> do this later mc.getLabel()
-
-            # TODO: label = max(sum(cl1), ... , sum(cln))
-            # so I need to know the number of real clusters (n) and create a new counter for each
-            # each time we calcDelta
-            # TODO: We can get this if we pass label along with the training data?
-            # TODO: get correctPts
 
             return delta_cf1x, delta_cf2x, delta_n, delta_t, delta_pts, lbl_counts
+
+        # TODO:
+        # lbl_counts = [0] * self.NUM_LABELS
+        # for row in sortedRDD.collect():
+        #     print(f"HERERERE {len(row)}")
+        #     print(f"0) {row[0]}")
+        #     print(f"1) {row[1]}")
+        #     # arrivalT, featVals, lbl = row[1][0], row[1][1], row[1][2]
+        #     # print(f"HERE lbl = {lbl} and lbl_counts = {lbl_counts}")
 
         return sortedRDD.mapValues(lambda x: calcDelta(x)).collect()
 

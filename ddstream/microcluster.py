@@ -48,13 +48,26 @@ class CoreMicroCluster:
 
     # TODO: handle
     def calcPurity(self):
+        # print(f"in calcPurity for {self}")
+        # print(f"lbl(prev) = {self.label}")
         lbl = self.getLabel()
-        self.purity = self.correctPts / self.lbl_counts[lbl]
+        # print(f"lbl(after) = {lbl}")
+        # print(f"lbl_counts = {self.lbl_counts}")
+        # print(f"purity(calc) = {self.correctPts} / {sum(self.lbl_counts)}")
+        # print(f"purity(prev) = {self.purity}")
+        self.purity = self.correctPts / sum(self.lbl_counts)
+        # print(f"purity(after) = {self.purity}")
+        # print("\n\n")
         return self.purity
 
     def getLabel(self):
+        # print(f"in getLabel")
+        # print(f"lbl_counts = {self.lbl_counts}")
+        # print(f"correctPts(prev) = {self.correctPts}")
         self.correctPts = max(self.lbl_counts)
+        # print(f"correctPts(after) = {self.correctPts}")
         self.label = self.lbl_counts.index(self.correctPts)
+        # print(f"label (calculated) = {self.label}")
         return self.label
 
     def calcCf2x(self, dt):

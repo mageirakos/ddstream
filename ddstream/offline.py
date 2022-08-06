@@ -4,15 +4,14 @@ import numpy as np
 
 
 class MacroCluster:
-    def __init__(self, cf2x, cf1x, weight, num_labels=3, label=None):
+    def __init__(self, cf2x, cf1x, weight, pts, correctPts, lbl_counts, num_labels=3, label=None):
         self.cf2x = cf2x
         self.cf1x = cf1x
         self.weight = weight
-        self.pts = 1
+        self.pts = pts
         self.num_labels = num_labels
-        self.lbl_counts = [0] * self.num_labels
-        self.lbl_counts[label] += 1
-        self.correctPts = 1
+        self.lbl_counts = lbl_counts
+        self.correctPts = correctPts
         self.label = self.lbl_counts.index(max(self.lbl_counts))
         self.purity = None
 
@@ -25,9 +24,10 @@ class MacroCluster:
     # TODO: Calculate Purity by treating the micro clusters as points
     def calcPurity(self):
         lbl = self.getLabel()
-        self.purity = self.correctPts / self.lbl_counts[lbl]
+        self.purity = self.correctPts / sum(self.lbl_counts)
         return self.purity
-     #TODO: Fix this is not correct
+
+    # TODO: Fix this is not correct
     def getLabel(self):
         self.correctPts = max(self.lbl_counts)
         self.label = self.lbl_counts.index(self.correctPts)
@@ -70,9 +70,13 @@ class DDStreamOfflineModel:
                             cf2x=mc.cf2x,
                             cf1x=mc.cf1x,
                             weight=mc.weight,
+                            pts=mc.pts,
+                            correctPts=max(mc.lbl_counts),
+                            lbl_counts=mc.lbl_counts,
                             num_labels=mc.num_labels,
                             label=mc.getLabel(),
                         )
+                        newMacro.lbl_counts = mc.lbl_counts
                         self.macroClusters.append(newMacro)
                         self.expandCluster(coreMicroClusters, neighborHoodList)
 
@@ -134,7 +138,9 @@ class DDStreamOfflineModel:
                     self.macroClusters[last_mc].lbl_counts, points[neighbor].lbl_counts
                 )
             ]
-            self.macroClusters[last_mc].pts = points[neighbor].pts
+            self.macroClusters[last_mc].pts = (
+                self.macroClusters[last_mc].pts + points[neighbor].pts
+            )
             self.macroClusters[last_mc].label = self.macroClusters[last_mc].getLabel()
 
         for neighbor in neighborHoodList:
