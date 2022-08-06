@@ -21,13 +21,11 @@ class MacroCluster:
         else:
             return self.cf1x
 
-    # TODO: Calculate Purity by treating the micro clusters as points
     def calcPurity(self):
         lbl = self.getLabel()
         self.purity = self.correctPts / sum(self.lbl_counts)
         return self.purity
 
-    # TODO: Fix this is not correct
     def getLabel(self):
         self.correctPts = max(self.lbl_counts)
         self.label = self.lbl_counts.index(self.correctPts)
