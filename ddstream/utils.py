@@ -52,6 +52,7 @@ MICRO_CLUSTERS = {
     "correctPts": [],
     "label": [],
     "purity": [],
+    "points in batch": [],
 }
 
 MACRO_CLUSTERS = {
@@ -140,6 +141,7 @@ def append_to_MICRO_CLUSTERS(
     correctPts,
     label,
     purity,
+    points_in_batch,
 ):
     MICRO_CLUSTERS["batch id"].append(batch_id)
     MICRO_CLUSTERS["microcluster id"].append(microcluster_id)
@@ -154,6 +156,7 @@ def append_to_MICRO_CLUSTERS(
     MICRO_CLUSTERS["correctPts"].append(correctPts)
     MICRO_CLUSTERS["label"].append(label)
     MICRO_CLUSTERS["purity"].append(purity)
+    MICRO_CLUSTERS["points in batch"].append(points_in_batch)
     return True
 
 

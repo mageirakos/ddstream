@@ -38,7 +38,7 @@ class CoreMicroCluster:
         self.lastEdit = lastEdit
         self.lmbda = lmbda
         # During initialization only 1 point in mc so :
-        self.pts = 1
+        self.pts = 1 #pts will keep the num of pts arrived in current batch
         self.num_labels = num_labels
         self.lbl_counts = [0] * self.num_labels
         self.lbl_counts[label] += 1
@@ -167,15 +167,19 @@ class CoreMicroCluster:
         :param point = (timestamp, np.array<features>)
         :param n =
         """
+        # print(f"insert - point = {point}, lbl_counts = {self.lbl_counts}")
         ts, point_vals = point[0], point[1]
         self.setWeight(n, ts)
         self.cf1x = self.cf1x + point_vals
         self.cf2x = self.cf2x + point_vals * point_vals
         self.pts += n
-        if label:
+        if label != None:
             self.lbl_counts[label] += 1
+        self.label = self.getLabel() # must call this for corrPts to be calculated
+        # print(f"lbl_counts = {self.lbl_counts}")
 
-    def insertAtT(self, point, time, n, label):
+
+    def insertAtT(self, point, time, n, label=None):
         """
         Incremental insert of point at time into CoreMicroCluster (Property 3.1 Cao et al.)
 
@@ -183,13 +187,13 @@ class CoreMicroCluster:
         :param time = timestamp of point arrival
         :param n =
         """
-        # print(f"insertATt| point = {point}, label = {label}")
         self.setWeight(n, time)
-        self.cf1x += point
-        self.cf2x += point * point
+        self.cf1x = self.cf1x + point
+        self.cf2x = self.cf2x + point * point
         self.pts += n
-        self.lbl_counts[label] += 1
-        # print(f"lbl_counts = {self.lbl_counts}")
+        if label != None:
+            self.lbl_counts[label] += 1
+        self.label = self.getLabel() # must call this for corrPts to be calculated
 
     # TODO : Is this correct merging? Should weight be recalculated? Why max(lastEdit)?
     # TODO : Not using this anywhere...
