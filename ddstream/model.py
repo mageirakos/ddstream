@@ -284,14 +284,14 @@ class DDStreamModel:
             # Step 3: Assign each point in the rdd to closest micro cluster (if radius<epsilon)
             assignations = self.assignToMicroCluster(rdd)
             # only for printing:
-            to_be_printed = assignations.collect()
-            # print(f"ASSIGNATIONS: {to_be_printed}")
-            counter = defaultdict(int) #  key = -1,0 ... counter - ....
-            for row in to_be_printed:
-                cluster_id = row[0]
-                counter[cluster_id] += 1
-            print("pmic assignments: ", end="")
-            pprint(counter)
+            # to_be_printed = assignations.collect()
+            # # print(f"ASSIGNATIONS: {to_be_printed}")
+            # counter = defaultdict(int) #  key = -1,0 ... counter - ....
+            # for row in to_be_printed:
+            #     cluster_id = row[0]
+            #     counter[cluster_id] += 1
+            # print("pmic assignments: ", end="")
+            # pprint(counter)
             # for key, val in counter.items():
             #     print(f"cl_{key} = {val}, total = {sum(counter.values())}")
             # print(f"assignations : minIndex={str(row[0])}, len={str(len(row[1]))} , feats={str(row[1])}")#, label={str(row[2])}")
@@ -599,14 +599,14 @@ class DDStreamModel:
         # dataOut: data not assigned to primary microclusters that have not been assigned to outlier microcluster
         # or not assigned to any cluster -> index == -1
         dataOut = self.assignToOutlierCluster(dataInAndOut)
-        to_be_printed = dataOut.collect()
-        # print(f"ASSIGNATIONS: {to_be_printed}")
-        counter = defaultdict(int) #  key = -1,0 ... counter - ....
-        for row in to_be_printed:
-            cluster_id = row[0]
-            counter[cluster_id] += 1
-        print("outlier mc assignments: ", end="")
-        pprint(counter)
+        # to_be_printed = dataOut.collect()
+        # # print(f"ASSIGNATIONS: {to_be_printed}")
+        # counter = defaultdict(int) #  key = -1,0 ... counter - ....
+        # for row in to_be_printed:
+        #     cluster_id = row[0]
+        #     counter[cluster_id] += 1
+        # print("outlier mc assignments: ", end="")
+        # pprint(counter)
         # data in outlier microclusters
         # print(f"dataOut = {dataOut.collect()}")
         dataOut.persist()
