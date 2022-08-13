@@ -151,7 +151,7 @@ class CoreMicroCluster:
         if self.weight > 1:
             sumi, maxi = 0, 0
             for i in range(len(self.cf2x)):
-                tmp = self.cf2x[i] / self.weight - (self.cf1x[i] * self.cf1x[i]) / (
+                tmp = abs(self.cf2x[i]) / self.weight - abs((self.cf1x[i] * self.cf1x[i])) / (
                     self.weight * self.weight
                 )
                 sumi += tmp  # use sumi for RMSD on mean radius

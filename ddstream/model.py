@@ -375,6 +375,7 @@ class DDStreamModel:
                     label=microcl.getLabel(),
                     purity=microcl.calcPurity(),
                     points_in_batch = points_in_batch,
+                    radius=microcl.getRMSD(),
                 )
                 # pprint(f"MICRO_CLUSTERS = {MICRO_CLUSTERS}")
             # append avg purity from above microclusters in current batch
@@ -505,7 +506,7 @@ class DDStreamModel:
                 assert type(featVals) == type(delta_cf1x) == type(delta_cf1x)
                 lmbda = math.pow(2, -self.lmbda * (arrivalT - delta_t))
                 delta_cf1x = (delta_cf1x * lmbda) + featVals
-                delta_cf2x = (delta_cf1x * lmbda) + featVals * featVals
+                delta_cf2x = (delta_cf2x * lmbda) + featVals * featVals
                 delta_n = (delta_n * lmbda) + 1
                 delta_t = max(arrivalT, delta_t)
                 # get total pts
@@ -706,6 +707,7 @@ class DDStreamModel:
         # TODO: Handle .lbl_counts etc. in code below where we create new microcluster
         # tyoe(realOutliers) == list()
         #TODO BUG: The lbl_counts, pts, correctPts is not calculated correctly
+        # premerging + creation of new outlier microclusters
         if len(realOutliers) > 0:
             # print(f"Number of realOutliers =  {len(realOutliers)}")
             # print(f"realOutliers =  {realOutliers}")
@@ -792,6 +794,15 @@ class DDStreamModel:
                 del self.oMicroClusters[r]
                 # print(f"self.oMicroClusters = {self.oMicroClusters}")
                 # self.oMicroClusters -= self.oMicroClusters[r]
+
+    
+        #TODO: We need to merge the closest pmic
+
+
+
+
+
+
 
         DriverTime = time.time() - DriverTime
         self.AlldriverTime += DriverTime
