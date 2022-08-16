@@ -100,6 +100,93 @@ services:
     environment:
       - "SPARK_MASTER=spark://spark-master:7077"
 
+  # spark-worker-4:
+  #   container_name: spark-worker-4
+  #   build:
+  #     context: .
+  #     dockerfile: DockerfileWorkerNumPy
+  #   image: spark-worker-numpy
+  #   networks: 
+  #     - kafka-spark-net
+  #   depends_on:
+  #     - spark-master
+  #   ports:
+  #     - "8084:8081"
+  #   volumes:
+  #     - ./shared_data:/data
+  #   environment:
+  #     - "SPARK_MASTER=spark://spark-master:7077"
+
+  # spark-worker-5:
+  #   container_name: spark-worker-5
+  #   build:
+  #     context: .
+  #     dockerfile: DockerfileWorkerNumPy
+  #   image: spark-worker-numpy
+  #   networks: 
+  #     - kafka-spark-net
+  #   depends_on:
+  #     - spark-master
+  #   ports:
+  #     - "8085:8081"
+  #   volumes:
+  #     - ./shared_data:/data
+  #   environment:
+  #     - "SPARK_MASTER=spark://spark-master:7077"
+
+
+  # spark-worker-6:
+  #   container_name: spark-worker-6
+  #   build:
+  #     context: .
+  #     dockerfile: DockerfileWorkerNumPy
+  #   image: spark-worker-numpy
+  #   networks: 
+  #     - kafka-spark-net
+  #   depends_on:
+  #     - spark-master
+  #   ports:
+  #     - "8086:8081"
+  #   volumes:
+  #     - ./shared_data:/data
+  #   environment:
+  #     - "SPARK_MASTER=spark://spark-master:7077"
+
+
+  # spark-worker-7:
+  #   container_name: spark-worker-7
+  #   build:
+  #     context: .
+  #     dockerfile: DockerfileWorkerNumPy
+  #   image: spark-worker-numpy
+  #   networks: 
+  #     - kafka-spark-net
+  #   depends_on:
+  #     - spark-master
+  #   ports:
+  #     - "8087:8081"
+  #   volumes:
+  #     - ./shared_data:/data
+  #   environment:
+  #     - "SPARK_MASTER=spark://spark-master:7077"
+
+  # spark-worker-8:
+  #   container_name: spark-worker-8
+  #   build:
+  #     context: .
+  #     dockerfile: DockerfileWorkerNumPy
+  #   image: spark-worker-numpy
+  #   networks: 
+  #     - kafka-spark-net
+  #   depends_on:
+  #     - spark-master
+  #   ports:
+  #     - "8088:8081"
+  #   volumes:
+  #     - ./shared_data:/data
+  #   environment:
+  #     - "SPARK_MASTER=spark://spark-master:7077"
+
 networks:
   kafka-spark-net:
     name: kafka-spark-net
