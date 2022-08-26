@@ -39,7 +39,6 @@ def parse_args():
         type=int,
         help="Number of dimensions",
     )
-    # TODO: Fix not correct ( unless I specify it each time )
     required.add_argument(
         "--speedRate",
         default="100",
@@ -102,7 +101,6 @@ def parse_args():
         type=float,
         help="offline epsilon (default 0.4)",
     )
-    # TODO: What is this where is it used
     required.add_argument(
         "--trainingDataAmount",
         default="10000",
@@ -251,15 +249,10 @@ if __name__ == "__main__":
         INITIAL_EPSILON,
         MU,
         BETA,
-        # TFACTOR,
         INITIAL_DATA_PATH,
         OFFLINE_EPSILON,
         STREAM_DATA_AMOUNT,
-        # OS_TR,
-        # K,
-        # CM_DATA_PATH,
         OFFLINE_MU,
-        # CHECK,
         DATASET_NAME,
         STREAM_DATA_PATH,
         TOPIC,
@@ -294,7 +287,6 @@ if __name__ == "__main__":
 
     print("\n")
 
-    # database options : [ 'test', 'nsl-kdd', 'toy', 'init_toy']
     data = split_data(input_df1, num_feats=NUM_DIMENSIONS)
     # # For testing:
     # training_data = data.select("time", "features")
@@ -311,19 +303,19 @@ if __name__ == "__main__":
     # exit()
 
     # 10 sec to have time to start the data stream
-    # TODO: have the args one overwrite this one instead of the opposite
+    # we overwrite if default
     if TIMEOUT == 10000001:
         TIMEOUT = 10 + (STREAM_DATA_AMOUNT / (BATCH_TIME * STREAM_SPEED)) * BATCH_TIME
     else:
         pass
-    # TODO: Change dataset name earlier at start
+
     temp = STREAM_DATA_PATH.split("/")[-1].split(".")[0]
     assert temp == DATASET_NAME
     # assert TIMEOUT == 10 + ( STREAM_DATA_AMOUNT / (BATCH_TIME * STREAM_SPEED) )* BATCH_TIME
-    assert INITIAL_EPSILON == 0.4
+    # assert INITIAL_EPSILON == 0.2
     assert LAMBDA == 0.25
     assert BETA == 0.2
-    assert MU == 10
+    # assert MU == 10
     # assert NUM_LABELS == 3
 
     model = DDStreamModel(
@@ -340,7 +332,7 @@ if __name__ == "__main__":
     assert model.Tp == 4
 
     # Step 1. Initialize Micro Clusters
-    model.initDBSCAN(ssc, INITIAL_EPSILON, INITIAL_DATA_PATH)
+    model.initDBSCAN(ssc=ssc, initialEpsilon=INITIAL_EPSILON, path=INITIAL_DATA_PATH)
 
     # Step 2. Start Training Stream
     training_data = data.select("time", "features", "label")
@@ -489,7 +481,3 @@ if __name__ == "__main__":
             pickle.dump(MACRO_METRICS, f)
     else:
         print("not saving experiments")
-    # # to load
-    # with open('saved_dictionary.pkl', 'rb') as f:
-    # loaded_dict =
-

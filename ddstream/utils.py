@@ -40,6 +40,7 @@ MICRO_METRICS = {
 
 MICRO_CLUSTERS = {
     "batch id": [],
+    "type": [],
     "microcluster id": [],
     "centroid": [],
     "cf1x": [],
@@ -130,6 +131,7 @@ def append_to_MICRO_METRICS(batch_id, name, value):
 
 def append_to_MICRO_CLUSTERS(
     batch_id,
+    mctype,
     microcluster_id,
     centroid,
     cf1x,
@@ -146,6 +148,7 @@ def append_to_MICRO_CLUSTERS(
     radius,
 ):
     MICRO_CLUSTERS["batch id"].append(batch_id)
+    MICRO_CLUSTERS["type"].append(mctype)
     MICRO_CLUSTERS["microcluster id"].append(microcluster_id)
     MICRO_CLUSTERS["centroid"].append(centroid)
     MICRO_CLUSTERS["cf1x"].append(cf1x)

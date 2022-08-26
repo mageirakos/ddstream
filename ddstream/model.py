@@ -74,7 +74,7 @@ class DDStreamModel:
 
     # TODO: Test (test with initLabels and calculations)
     # TODO: Handle .lbl_counts etc. in code below (probably in insert?)
-    def initDBSCAN(self, ssc, initialEpsilon=0.5, path="./data/init_toy_dataset.csv"):
+    def initDBSCAN(self, ssc, initialEpsilon, path):
         """
         Initialize DBSCAN microcluster.
 
@@ -171,7 +171,7 @@ class DDStreamModel:
         self.initialized = True
         print("END of Initialization\n")
 
-    def getNeighborHood(self, pos: int, epsilon: float):
+    def getNeighborHood(self, pos, epsilon):
         """
         Get the indices of the points in the neighborhood of the point = self.initArr[pos]
 
@@ -197,8 +197,8 @@ class DDStreamModel:
                 # TODO: Possible problem look into https://stackoverflow.com/questions/66806583/np-linalg-norm-ord-2-not-giving-euclidean-norm
                 dist = np.linalg.norm(self.initArr[pos] - self.initArr[i])
                 total_dist += dist
-                # print(f"dist: np.linalg.norm(A) = {dist} < epsilon = {epsilon}", end="")
-                # print(f"\tAVG distance = {total_dist/pts}", end="")
+                # print(f"{i}) dist: np.linalg.norm(A) = {dist} < epsilon = {epsilon}", end="")
+                # print(f"\tAVG distance = {total_dist/pts}")
                 if dist < epsilon:
                     # print("-> 2 YES")
                     # add the point to the neighborhood of the initArr[pos] point
@@ -323,20 +323,20 @@ class DDStreamModel:
             # print(f"Model checking completed... detect time taken (ms) = {detectTime}")
             # ------------------ STATUS PRINTS ---------------------
             # primary
-            print("Primary mc:")
-            print(
-                f"After batch {batch_id} number of p microclusters: {len(self.broadcastPMic.value)}"
-            )
-            for i, mc in enumerate(self.broadcastPMic.value):
-                print(
-                    f"pmic_{i} last_t={mc[0].lastEdit} w = {mc[0].weight} center = {mc[0].getCentroid()} lbl_counts = {mc[0].lbl_counts} pts = {mc[0].pts} label = {mc[0].getLabel()} correctPts = {mc[0].correctPts} purity = {mc[0].calcPurity()}"
-                )
+            # print("Primary mc:")
+            # print(
+            #     f"After batch {batch_id} number of p microclusters: {len(self.broadcastPMic.value)}"
+            # )
+            # for i, mc in enumerate(self.broadcastPMic.value):
+            #     print(
+            #         f"pmic_{i} last_t={mc[0].lastEdit} w = {mc[0].weight} center = {mc[0].getCentroid()} lbl_counts = {mc[0].lbl_counts} pts = {mc[0].pts} label = {mc[0].getLabel()} correctPts = {mc[0].correctPts} purity = {mc[0].calcPurity()}"
+            #     )
             # primary purity
             pmic_avg_purity = self.calcAvgPurity(self.broadcastPMic.value)
-            print(
-                f"After batch {batch_id} number of p microclusters: {len(self.broadcastPMic.value)}"
-            )
-            print(f"AVERAGE PURITY (pmic) = {pmic_avg_purity}")
+            # print(
+            #     f"After batch {batch_id} number of p microclusters: {len(self.broadcastPMic.value)}"
+            # )
+            # print(f"AVERAGE PURITY (pmic) = {pmic_avg_purity}")
             # outlier
             # print(f"Outlier mc :")
             # for i, mc in enumerate(self.broadcastOMic.value):
@@ -354,6 +354,7 @@ class DDStreamModel:
             # TODO: BUG when there was no update to an mc in current batch the .pts are left as it was
             # we need to reset them 
             total_pts = 0
+            # save primary
             for i, mc in enumerate(self.broadcastPMic.value):
                 microcl, _ = mc[0], mc[1]
                 # print("APPENDING TO MICRO CLUSTER")
@@ -362,6 +363,32 @@ class DDStreamModel:
                 # print(f"mc_{i}) lbl_counts = {microcl.lbl_counts} correct = {microcl.correctPts}")
                 append_to_MICRO_CLUSTERS(
                     batch_id=self.batch_id,
+                    mctype='primary',
+                    microcluster_id=id(microcl),
+                    centroid=microcl.getCentroid().tolist(),
+                    cf1x=microcl.cf1x.tolist(),
+                    cf2x=microcl.cf2x.tolist(),
+                    weight=microcl.weight,
+                    t0=microcl.t0,
+                    lastEdit=microcl.lastEdit,
+                    pts=microcl.pts,
+                    lbl_counts=microcl.lbl_counts,
+                    correctPts=microcl.correctPts,
+                    label=microcl.getLabel(),
+                    purity=microcl.calcPurity(),
+                    points_in_batch = points_in_batch,
+                    radius=microcl.getRMSD(),
+                )
+            # save outliers
+            for i, mc in enumerate(self.broadcastOMic.value):
+                microcl, _ = mc[0], mc[1]
+                # print("APPENDING TO MICRO CLUSTER")
+                total_pts +=  microcl.pts
+                # print(f"mc_{i}) pts = {microcl.pts} total = {total_pts}")
+                # print(f"mc_{i}) lbl_counts = {microcl.lbl_counts} correct = {microcl.correctPts}")
+                append_to_MICRO_CLUSTERS(
+                    batch_id=self.batch_id,
+                    mctype='outlier',
                     microcluster_id=id(microcl),
                     centroid=microcl.getCentroid().tolist(),
                     cf1x=microcl.cf1x.tolist(),
@@ -383,6 +410,7 @@ class DDStreamModel:
             append_to_MICRO_METRICS(
                 batch_id=self.batch_id, name="PURITY(avg)", value=avg_purity
             )
+
 
     def assignToMicroCluster(self, rdd):
         """
@@ -512,6 +540,9 @@ class DDStreamModel:
                 # get total pts
                 delta_pts = delta_pts + 1
                 # TODO: Sometimes (can't always recreate) I get index error here, why?
+                
+                print(f"\nHERE len() = {len(lbl_counts)}")
+                print(f"lbl_counts[lbl] = lbl_counts[{lbl}] = {lbl_counts[lbl]}\n")
                 lbl_counts[lbl] = lbl_counts[lbl] + 1
 
             return delta_cf1x, delta_cf2x, delta_n, delta_t, delta_pts, lbl_counts
@@ -787,7 +818,7 @@ class DDStreamModel:
             for r in sorted(upgradeToPMIC, reverse=True):
                 # print(f"r= {r} - deleting self.oMicroClusters[{r}] = {self.oMicroClusters[r]} from {self.oMicroClusters}")
                 # print("\nupgrading..")
-                print(f"upgradeToPMIC = {upgradeToPMIC}")
+                # print(f"upgradeToPMIC = {upgradeToPMIC}")
 
                 self.pMicroClusters.append(self.oMicroClusters[r])
                 # print(f"self.pMicroClusters = {self.pMicroClusters}")
