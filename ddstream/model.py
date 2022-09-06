@@ -514,7 +514,6 @@ class DDStreamModel:
                         merged = 1
                         j += 1
                 if merged == 0:
-                    # TODO: Fix
                     newOmic = CoreMicroCluster(
                         cf2x=point_vals * point_vals,
                         cf1x=point_vals,

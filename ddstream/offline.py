@@ -4,7 +4,9 @@ import numpy as np
 
 
 class MacroCluster:
-    def __init__(self, cf2x, cf1x, weight, pts, correctPts, lbl_counts, num_labels=3, label=None):
+    def __init__(
+        self, cf2x, cf1x, weight, pts, correctPts, lbl_counts, num_labels=3, label=None
+    ):
         self.cf2x = cf2x
         self.cf1x = cf1x
         self.weight = weight
@@ -78,9 +80,6 @@ class DDStreamOfflineModel:
                         self.macroClusters.append(newMacro)
                         self.expandCluster(coreMicroClusters, neighborHoodList)
 
-        # for i, mc in enumerate(self.macroClusters):
-        #     print(f"Macro cluster weight = {mc.weight}")
-        #     print(f"Macro cluster center = {mc.getCentroid()}")
         return self.macroClusters
 
     def getNeighborHood(self, pos, points):
@@ -98,14 +97,10 @@ class DDStreamOfflineModel:
                 dist = np.linalg.norm(
                     points[i].getCentroid() - points[pos].getCentroid()
                 )
-                # print(f"dist: {dist} \t centr1: {points[i].getCentroid()} centr2: {points[pos].getCentroid()}")
-                # print(f"2epsilon : {2*self.epsilon}")
                 if dist < 2 * self.epsilon:
                     idBuffer.append(i)
         return idBuffer
 
-    # TODO: Recursion Depth Exceeded -> look into it/debug
-    # TODO: Fix Infinite Recursion
     def expandCluster(self, points, neighborHoodList):
         """
         Creates MacroClusters based on extended neightborhood of MicroClusters (points)
@@ -155,15 +150,3 @@ class DDStreamOfflineModel:
         #     a = self.macroClusters.map(lambda x : (list(x.cf1x), list(x.cf2x)))
         #     n = self.macroClusters.map(lambda x : x.weight)
         #     r = zip(a, n)
-
-    # TODO: Fix
-    def getFinalMicroClusters(self, coreMicroClusters):
-        pass
-
-    # TODO: Fix
-    def updateClusters(self, coreMicroClusters, maxIterations):
-        pass
-
-    # TODO: Fix
-    def assign(self, input, cls):
-        pass

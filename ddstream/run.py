@@ -2,19 +2,13 @@ from utils import *
 from model import DDStreamModel
 from offline import DDStreamOfflineModel
 
-# general
 import argparse, os, pickle
 from pyspark.sql import SparkSession
-
-# import numpy as np
-
-# from pyspark.sql import udf
 from pyspark.sql.functions import *
 from pyspark.sql.types import *
 from pyspark.ml.linalg import DenseVector, Vectors, VectorUDT
 
 
-# TODO: Use all of the arguments in the code outside of parse_args
 def parse_args():
     # Parse cli arguments
     parser = argparse.ArgumentParser(
@@ -51,7 +45,6 @@ def parse_args():
         help="Number of distinct Labels",
     )
     # The number of initialData should be the same as the flow rate
-    # TODO: Fix not correct
     required.add_argument(
         "--initialDataAmount",
         default="150",
@@ -129,7 +122,6 @@ def parse_args():
         default="test",
         help="Kafka topic (default 'test')",
     )
-    # timeout
     optional.add_argument(
         "-t",
         "--timeout",
@@ -189,8 +181,6 @@ def parse_args():
     )
 
 
-# TODO: Might need to change again into numpy array instead of typical "Vector"
-# or do it later when calling DBSCAN from sklearn? http://blog.madhukaraphatak.com/spark-vector-to-numpy/
 def split_data(streaming_df, num_feats):
     """Change the input stream to be (label, Vector<features>)"""
 
@@ -204,12 +194,10 @@ def split_data(streaming_df, num_feats):
         res = []
         for i in range(len(arr) - 1):
             res.append(float(arr[i]))
-        # print(f"\n\nfeatures: {res}\n\n")
         return res
 
     # https://stackoverflow.com/questions/49623620/what-type-should-the-dense-vector-be-when-using-udf-function-in-pyspark
     dense_features = udf(lambda arr: Vectors.dense(get_features(arr)), VectorUDT())
-    # np array # dense_features = udf(lambda arr: np.array(get_features(arr)))
     split_df = streaming_df.select(
         streaming_df["key"].cast("Long"),
         split(streaming_df["value"], "/").alias("ts-vals"),
@@ -268,11 +256,6 @@ if __name__ == "__main__":
     ssc.sparkContext.addPyFile("ddstream/offline.py")
     ssc.sparkContext.addPyFile("ddstream/utils.py")
 
-    # Streaming Query
-    # TODO: Maybe using StreamingListener is a must (I need it to print some results )
-    # https://spark.apache.org/docs/2.2.0/api/python/pyspark.streaming.html
-    # https://www.youtube.com/watch?v=iqIdmCvSwwU
-
     input_df = (
         ssc.readStream.format("kafka")
         .option("kafka.bootstrap.servers", KAFKA_BOOTSTRAP_SERVERS)
@@ -288,22 +271,6 @@ if __name__ == "__main__":
     print("\n")
 
     data = split_data(input_df1, num_feats=NUM_DIMENSIONS)
-    # # For testing:
-    # training_data = data.select("time", "features")
-    # random_stream = (
-    #     training_data.writeStream.trigger(processingTime="5 seconds")
-    #     .outputMode("append")
-    #     .option("truncate", "false")
-    #     .format("console")
-    #     # .foreachBatch(model.run)
-    #     .start()
-    # )
-    # random_stream.awaitTermination(TIMEOUT)  # end of stream
-    # random_stream.stop()
-    # exit()
-
-    # 10 sec to have time to start the data stream
-    # we overwrite if default
     if TIMEOUT == 10000001:
         TIMEOUT = 10 + (STREAM_DATA_AMOUNT / (BATCH_TIME * STREAM_SPEED)) * BATCH_TIME
     else:
@@ -311,10 +278,8 @@ if __name__ == "__main__":
 
     temp = STREAM_DATA_PATH.split("/")[-1].split(".")[0]
     assert temp == DATASET_NAME
-    # assert TIMEOUT == 10 + ( STREAM_DATA_AMOUNT / (BATCH_TIME * STREAM_SPEED) )* BATCH_TIME
-    # assert INITIAL_EPSILON == 0.2
-    assert LAMBDA == 0.25
-    assert BETA == 0.2
+    # assert LAMBDA == 0.25
+    # assert BETA == 0.2
     # assert MU == 10
     # assert NUM_LABELS == 3
 
@@ -354,21 +319,12 @@ if __name__ == "__main__":
         .start()
     )
 
-    # TODO: Step 3. Print Results (info kept on streaming linstener)
-    # https://www.youtube.com/watch?v=iqIdmCvSwwU
-
     training_data_stream.awaitTermination(TIMEOUT)  # end of stream
     training_data_stream.stop()
-
-    # print(f"END broadcastPMic: {model.broadcastPMic} \t {model.broadcastPMic.value}")
 
     print("Stream Data Processing Completed.")
     print("\n\n\nSTART OFFLINE PHASE\n")
 
-    # TODO: Finish Offline phase
-
-    # with open(f"data/toy_dataset.csv") as f:
-    #     pass
     coreMicroClusters = model.getMicroClusters()
     for i, mc in enumerate(coreMicroClusters):
         print(f"cluster {i}")
@@ -394,11 +350,10 @@ if __name__ == "__main__":
         print(f"Macro cluster cf2x = {mc.cf2x}")
         print(f"Macro cluster center = {mc.getCentroid()}")
         print(f"Macro cluster purity = {mc.calcPurity()}")
-    # TODO: Fix bellow since (must not be same as microclusters)
     avg_purity = offline_model.calcAvgPurity(coreMacroClusters)
     print(f"AVERAGE PURITY (macro clusters) = {avg_purity}")
 
-    # TODO NOW: Save MACRO_CLUSTERS, DETAILS, MACRO_METRICS
+    # Save MACRO_CLUSTERS, DETAILS, MACRO_METRICS
     append_to_DETAILS(
         appName=APP_NAME,
         dataset=DATASET_NAME,  # can probably just get it from STREAM_DATA_PATH
@@ -406,7 +361,7 @@ if __name__ == "__main__":
         num_of_labels=NUM_LABELS,
         data_amount=STREAM_DATA_AMOUNT,
         init_data_location=INITIAL_DATA_PATH,
-        init_data_amount=INITIAL_DATA_AMOUNT,  # TODO: Fix not correct (should have assertion with Kafka)
+        init_data_amount=INITIAL_DATA_AMOUNT,
         num_of_features=NUM_DIMENSIONS,
         stream_speed_per_sec=STREAM_SPEED,
         batch_time=BATCH_TIME,
@@ -420,13 +375,10 @@ if __name__ == "__main__":
         offline_epsilon=OFFLINE_EPSILON,
     )
 
-    # TODO: Fix assertion
-    # assert total_batches == INITIAL_DATA_AMOUNT / (STREAM_SPEED * BATCH_TIME)
-
     for i, macrocl in enumerate(coreMacroClusters):
         append_to_MACRO_CLUSTERS(
             microcluster_id=id(macrocl),
-            total_batches=None,  # TODO: Fix this & assertion above
+            total_batches=None,
             centroid=macrocl.getCentroid().tolist(),
             cf1x=macrocl.cf1x.tolist(),
             cf2x=macrocl.cf2x.tolist(),
@@ -434,8 +386,8 @@ if __name__ == "__main__":
             pts=macrocl.pts,
             lbl_counts=macrocl.lbl_counts,
             correctPts=macrocl.correctPts,
-            label=macrocl.getLabel(),  # TODO: Fix this is not correct
-            purity=macrocl.calcPurity(),  # TODO: Fix this is not correct
+            label=macrocl.getLabel(),
+            purity=macrocl.calcPurity(),
         )
 
     avg_purity = offline_model.calcAvgPurity(coreMacroClusters)
@@ -443,7 +395,6 @@ if __name__ == "__main__":
 
     from pprint import pprint
 
-    # TODO NOW: Write everything
     print(f"Writing to file:")
     print(f"DETAILS")
     pprint(DETAILS)
