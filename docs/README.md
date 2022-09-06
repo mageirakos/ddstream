@@ -1,5 +1,4 @@
-# Distributed DenStream in Spark Structured Streaming
-MSc Thesis, University of Patras
+# Outdated info -> most of the installation process has now been automated with docker
 
 # System General:
 - Ubuntu v. 20.04.4
