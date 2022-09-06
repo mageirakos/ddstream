@@ -1,4 +1,4 @@
-# Distributed DenStream in Spark Structured Streaming
+# ddstream
 Diploma Thesis, University of Patras
 
 # System General:
