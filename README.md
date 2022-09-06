@@ -1,5 +1,4 @@
 # ddstream
-Diploma Thesis, University of Patras
 
 # System General:
 - Ubuntu v. 20.04.4
